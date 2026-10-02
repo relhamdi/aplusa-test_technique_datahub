@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     app_env: str = "dev"
     log_level: str = "INFO"
-    mongo_uri: str = "mongodb://localhost:27018"
+    mongo_uri: str = "mongodb://localhost:27017"
     mongo_db: str = "datahub"
     cors_origins: str = "http://localhost:5173"
     import_chunk_size: int = 50_000
@@ -22,5 +22,5 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    # Only one call per process (lru_cache) 
+    # Only one call per process (lru_cache)
     return Settings()
