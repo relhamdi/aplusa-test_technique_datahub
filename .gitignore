@@ -12,12 +12,6 @@ node_modules/
 dist/
 coverage/
 
-# Env
-.env
-.env.dev
-.env.preprod
-.env.prod
-
 # IDE / OS
 .idea/
 .vscode/
