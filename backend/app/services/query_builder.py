@@ -26,7 +26,7 @@ OPS_BY_TYPE: dict[ColumnType, set[FilterOp]] = {
 INDEXABLE_OPS = set(FilterOp) - {FilterOp.CONTAINS}
 
 
-def _column(key: str, columns: dict[str, dict[str, Any]]) -> dict[str, Any]:
+def get_column(key: str, columns: dict[str, dict[str, Any]]) -> dict[str, Any]:
     if key not in columns:
         raise InvalidQueryError(f"Unknown column '{key}'")
     return columns[key]
@@ -92,7 +92,7 @@ def build_match(
     filters: list[FilterCondition], columns: dict[str, dict[str, Any]]
 ) -> dict[str, Any]:
     """Translate filters (ANDed) into a MongoDB query document."""
-    conditions = [_condition(f, _column(f.column, columns)) for f in filters]
+    conditions = [_condition(f, get_column(f.column, columns)) for f in filters]
     if not conditions:
         return {}
     return conditions[0] if len(conditions) == 1 else {"$and": conditions}
@@ -108,7 +108,7 @@ def build_sort(
     """
     if sort is None:
         return [("_id", 1)]
-    col = _column(sort.column, columns)
+    col = get_column(sort.column, columns)
     direction = 1 if sort.direction == "asc" else -1
     return [(f"d.{col['key']}", direction), ("_id", direction)]
 
