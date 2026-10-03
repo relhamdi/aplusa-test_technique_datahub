@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator
 from typing import Any
 
 from pymongo import ReturnDocument
@@ -22,15 +23,15 @@ class RowRepository:
     async def drop(self, collection: str) -> None:
         await self._db.drop_collection(collection)
 
-    async def find_page(
+    def _cursor(
         self,
         collection: str,
         match: dict[str, Any],
         sort: list[tuple[str, int]],
         skip: int,
         limit: int,
-    ) -> list[dict[str, Any]]:
-        cursor = (
+    ):
+        return (
             self._db[collection]
             # Projection: ingest_id is internal and never sent to the client.
             .find(match, {"ingest_id": 0})
@@ -39,7 +40,40 @@ class RowRepository:
             .limit(limit)
             .allow_disk_use(True)
         )
-        return await cursor.to_list(length=limit)
+
+    async def find_page(
+        self,
+        collection: str,
+        match: dict[str, Any],
+        sort: list[tuple[str, int]],
+        skip: int,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        return await self._cursor(collection, match, sort, skip, limit).to_list(
+            length=limit
+        )
+
+    async def iter_page(
+        self,
+        collection: str,
+        match: dict[str, Any],
+        sort: list[tuple[str, int]],
+        skip: int,
+        limit: int,
+        batch_size: int,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Stream a page document by document, fetched from Mongo in batches.
+
+        Memory stays bounded by batch_size whatever the page size is.
+        """
+        cursor = self._cursor(collection, match, sort, skip, limit).batch_size(
+            batch_size
+        )
+        try:
+            async for doc in cursor:
+                yield doc
+        finally:
+            await cursor.close()
 
     async def count(self, collection: str, match: dict[str, Any]) -> int:
         return await self._db[collection].count_documents(match)
