@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     mongo_db: str = "datahub"
     cors_origins: str = "http://localhost:5173"
     import_chunk_size: int = 50_000
+    # Upload size cap, checked once the multipart body has been received.
+    max_upload_mb: int = 500
 
     @property
     def cors_origins_list(self) -> list[str]:
