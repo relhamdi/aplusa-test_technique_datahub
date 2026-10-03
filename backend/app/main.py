@@ -8,6 +8,7 @@ from app.api.health import router as health_router
 from app.api.imports import router as imports_router
 from app.api.ingestion import router as ingestion_router
 from app.api.rows import router as rows_router
+from app.api.stats import router as stats_router
 from app.core.config import get_settings
 from app.core.database import database
 from app.core.indexes import ensure_base_indexes
@@ -37,6 +38,7 @@ def create_app() -> FastAPI:
     app.include_router(imports_router)
     app.include_router(ingestion_router)
     app.include_router(rows_router)
+    app.include_router(stats_router)
     return app
 
 
