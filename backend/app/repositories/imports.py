@@ -106,3 +106,14 @@ class ImportRepository:
             {"_id": import_id, "rows_collection": collection},
             {"$addToSet": {"indexed_columns": key}},
         )
+
+    async def adjust_row_count(
+        self,
+        import_id: ObjectId,
+        collection: str,
+        delta: int,
+    ) -> None:
+        await self._col.update_one(
+            {"_id": import_id, "rows_collection": collection},
+            {"$inc": {"row_count": delta}, "$set": {"updated_at": datetime.now(UTC)}},
+        )
