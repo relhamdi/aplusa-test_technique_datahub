@@ -20,3 +20,31 @@ class RowRepository:
 
     async def drop(self, collection: str) -> None:
         await self._db.drop_collection(collection)
+
+    async def find_page(
+        self,
+        collection: str,
+        match: dict[str, Any],
+        sort: list[tuple[str, int]],
+        skip: int,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        cursor = (
+            self._db[collection]
+            # Projection: ingest_id is internal and never sent to the client.
+            .find(match, {"ingest_id": 0})
+            .sort(sort)
+            .skip(skip)
+            .limit(limit)
+            .allow_disk_use(True)
+        )
+        return await cursor.to_list(length=limit)
+
+    async def count(self, collection: str, match: dict[str, Any]) -> int:
+        return await self._db[collection].count_documents(match)
+
+    async def create_column_index(self, collection: str, key: str) -> None:
+        # (field, _id): see build_sort for why _id is part of the index.
+        await self._db[collection].create_index(
+            [(f"d.{key}", 1), ("_id", 1)], name=f"idx_d_{key}"
+        )
