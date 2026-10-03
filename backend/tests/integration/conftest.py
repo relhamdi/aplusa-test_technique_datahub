@@ -3,6 +3,7 @@ from app.core.config import get_settings
 from app.core.database import database
 from app.core.indexes import ensure_base_indexes
 from app.main import app
+from app.services.indexing import index_manager
 from httpx import ASGITransport, AsyncClient
 
 
@@ -21,5 +22,6 @@ async def client():
         ) as c:
             yield c
     finally:
+        await index_manager.wait_idle()
         await database.db.client.drop_database(settings.mongo_db)
         await database.close()
