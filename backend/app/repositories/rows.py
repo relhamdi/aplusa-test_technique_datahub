@@ -76,3 +76,11 @@ class RowRepository:
     async def delete_many(self, collection: str, match: dict[str, Any]) -> int:
         result = await self._db[collection].delete_many(match)
         return result.deleted_count
+
+    async def aggregate(
+        self,
+        collection: str,
+        pipeline: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        cursor = await self._db[collection].aggregate(pipeline, allowDiskUse=True)
+        return await cursor.to_list(length=None)
