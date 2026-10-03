@@ -1,7 +1,7 @@
-from app.core.database import database
-from app.services.indexing import index_manager
 from bson import ObjectId
 
+from app.core.database import database
+from app.services.indexing import index_manager
 from tests.integration.helpers import seed_import
 
 

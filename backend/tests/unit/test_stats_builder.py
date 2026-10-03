@@ -1,4 +1,5 @@
 import pytest
+
 from app.schemas.query import FilterOp
 from app.schemas.stats import ValueFilter, ValueSort
 from app.services.query_builder import InvalidQueryError
