@@ -1,9 +1,11 @@
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 
 from app.api.deps import RowMutationServiceDep, RowQueryServiceDep
 from app.api.errors import http_errors
+from app.api.ndjson import ndjson_stream
 from app.schemas.mutation import BatchDelete, BatchResult, BatchUpdate, RowUpdate
-from app.schemas.query import PageOut, RowOut, RowQuery
+from app.schemas.query import PageOut, RowOut, RowQuery, StreamQuery
 
 router = APIRouter(prefix="/imports", tags=["rows"])
 
@@ -13,6 +15,21 @@ router = APIRouter(prefix="/imports", tags=["rows"])
 async def query_rows(import_id: str, query: RowQuery, service: RowQueryServiceDep):
     with http_errors():
         return await service.query(import_id, query)
+
+
+@router.post("/{import_id}/rows/stream")
+async def stream_rows(import_id: str, query: StreamQuery, service: RowQueryServiceDep):
+    with http_errors():
+        stream = await service.stream(import_id, query)
+    return StreamingResponse(
+        ndjson_stream(stream.meta, stream.rows),
+        media_type="application/x-ndjson",
+        headers={
+            # Tell reverse proxies to not buffer the body
+            "X-Accel-Buffering": "no",
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @router.patch("/{import_id}/rows/{row_id}", response_model=RowOut)
