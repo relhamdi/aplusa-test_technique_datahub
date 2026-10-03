@@ -1,19 +1,8 @@
-from app.core.database import database
-from app.services.indexing import index_manager
 from bson import ObjectId
 
-CSV = b"id,name,price\n1,apple,1.5\n2,banana,2.5\n3,cherry,\n4,apple pie,4.0\n"
-
-
-async def _seed(client) -> str:
-    import_id = (await client.post("/imports", json={"name": "T"})).json()["id"]
-    r = await client.post(
-        f"/imports/{import_id}/data",
-        data={"mode": "replace"},
-        files={"file": ("f.csv", CSV, "text/csv")},
-    )
-    assert r.status_code == 200
-    return import_id
+from app.core.database import database
+from app.services.indexing import index_manager
+from tests.integration.helpers import seed_import
 
 
 async def _query(client, import_id, **body):
@@ -25,20 +14,20 @@ def _ids(response) -> list:
 
 
 async def test_default_page_uses_stored_count(client):
-    import_id = await _seed(client)
+    import_id = await seed_import(client)
     r = await _query(client, import_id)
     assert r.status_code == 200
     assert r.json()["total"] == 4 and _ids(r) == [1, 2, 3, 4]
 
 
 async def test_sort_desc(client):
-    import_id = await _seed(client)
+    import_id = await seed_import(client)
     r = await _query(client, import_id, sort={"column": "c0", "direction": "desc"})
     assert _ids(r) == [4, 3, 2, 1]
 
 
 async def test_filters_are_anded_and_total_reflects_them(client):
-    import_id = await _seed(client)
+    import_id = await seed_import(client)
     r = await _query(
         client,
         import_id,
@@ -58,19 +47,19 @@ async def test_filters_are_anded_and_total_reflects_them(client):
 
 
 async def test_is_empty_filter(client):
-    import_id = await _seed(client)
+    import_id = await seed_import(client)
     r = await _query(client, import_id, filters=[{"column": "c2", "op": "is_empty"}])
     assert _ids(r) == [3]
 
 
 async def test_page_beyond_the_end_is_empty(client):
-    import_id = await _seed(client)
+    import_id = await seed_import(client)
     r = await _query(client, import_id, page=2, page_size=10)
     assert r.json()["rows"] == [] and r.json()["total"] == 4
 
 
 async def test_invalid_query_returns_422(client):
-    import_id = await _seed(client)
+    import_id = await seed_import(client)
     r = await _query(
         client, import_id, filters=[{"column": "zz", "op": "equals", "value": 1}]
     )
@@ -83,7 +72,7 @@ async def test_unknown_import_returns_404(client):
 
 
 async def test_sorting_builds_the_index_in_background(client):
-    import_id = await _seed(client)
+    import_id = await seed_import(client)
     r = await _query(client, import_id, sort={"column": "c0"})
     assert r.json()["indexing"] == ["c0"]  # the query ran anyway
 
