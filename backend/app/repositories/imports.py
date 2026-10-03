@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from bson import ObjectId
-from pymongo import UpdateOne
+from pymongo import ReturnDocument, UpdateOne
 from pymongo.asynchronous.database import AsyncDatabase
 
 
@@ -69,3 +69,29 @@ class ImportRepository:
 
     async def drop_rows_collection(self, name: str) -> None:
         await self._db.drop_collection(name)
+
+    async def replace_data(
+        self, import_id: ObjectId, fields: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """Atomically point the import at its new rows collection.
+
+        Returns the document as it was BEFORE the swap, 
+        so the caller can drop the previous rows collection. 
+        """
+        fields["updated_at"] = datetime.now(UTC)
+        return await self._col.find_one_and_update(
+            {"_id": import_id},
+            {"$set": fields},
+            return_document=ReturnDocument.BEFORE,
+        )
+
+    async def record_append(
+        self, import_id: ObjectId, inserted: int, last_import: dict[str, Any]
+    ) -> None:
+        await self._col.update_one(
+            {"_id": import_id},
+            {
+                "$inc": {"row_count": inserted},
+                "$set": {"last_import": last_import, "updated_at": datetime.now(UTC)},
+            },
+        )
