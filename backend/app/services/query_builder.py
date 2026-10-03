@@ -53,8 +53,13 @@ def coerce_value(raw: Any, col_type: ColumnType, column_name: str) -> Any:
         ) from exc
 
 
-def _condition(f: FilterCondition, col: dict[str, Any]) -> dict[str, Any]:
-    field = f"d.{col['key']}"
+def build_condition(
+    f: FilterCondition,
+    col: dict[str, Any],
+    field: str | None = None,
+) -> dict[str, Any]:
+    """Translate one filter to a Mongo condition."""
+    field = field or f"d.{col['key']}"
     col_type = ColumnType(col["type"])
     if f.op not in OPS_BY_TYPE[col_type]:
         raise InvalidQueryError(
@@ -92,7 +97,7 @@ def build_match(
     filters: list[FilterCondition], columns: dict[str, dict[str, Any]]
 ) -> dict[str, Any]:
     """Translate filters (ANDed) into a MongoDB query document."""
-    conditions = [_condition(f, get_column(f.column, columns)) for f in filters]
+    conditions = [build_condition(f, get_column(f.column, columns)) for f in filters]
     if not conditions:
         return {}
     return conditions[0] if len(conditions) == 1 else {"$and": conditions}
