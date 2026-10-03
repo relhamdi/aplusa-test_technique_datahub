@@ -28,6 +28,7 @@ class ImportOut(BaseModel):
     order: int
     columns: list[ColumnOut]
     row_count: int
+    last_import: dict | None = None
     created_at: datetime
     updated_at: datetime
 
