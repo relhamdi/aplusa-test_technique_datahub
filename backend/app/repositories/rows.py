@@ -1,5 +1,6 @@
 from typing import Any
 
+from pymongo import ReturnDocument
 from pymongo.asynchronous.database import AsyncDatabase
 
 
@@ -48,3 +49,30 @@ class RowRepository:
         await self._db[collection].create_index(
             [(f"d.{key}", 1), ("_id", 1)], name=f"idx_d_{key}"
         )
+
+    async def update_one_returning(
+        self,
+        collection: str,
+        row_id: Any,
+        update: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        # Returns the document AFTER the update.
+        return await self._db[collection].find_one_and_update(
+            {"_id": row_id},
+            update,
+            projection={"ingest_id": 0},
+            return_document=ReturnDocument.AFTER,
+        )
+
+    async def update_many(
+        self,
+        collection: str,
+        match: dict[str, Any],
+        update: dict[str, Any],
+    ) -> tuple[int, int]:
+        result = await self._db[collection].update_many(match, update)
+        return result.matched_count, result.modified_count
+
+    async def delete_many(self, collection: str, match: dict[str, Any]) -> int:
+        result = await self._db[collection].delete_many(match)
+        return result.deleted_count
