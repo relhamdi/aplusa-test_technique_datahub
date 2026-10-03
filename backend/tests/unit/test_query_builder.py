@@ -1,5 +1,4 @@
 import pytest
-
 from app.schemas.query import FilterCondition, FilterOp, SortSpec
 from app.services.query_builder import (
     InvalidQueryError,

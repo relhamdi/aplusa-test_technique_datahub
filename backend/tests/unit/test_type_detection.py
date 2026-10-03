@@ -1,6 +1,5 @@
 import pandas as pd
 import pytest
-
 from app.services.type_detection import (
     ColumnType,
     ColumnTypeAccumulator,

@@ -1,6 +1,5 @@
-from bson import ObjectId
-
 from app.core.database import database
+from bson import ObjectId
 
 
 async def _create(client) -> str:

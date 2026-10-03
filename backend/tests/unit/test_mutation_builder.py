@@ -1,6 +1,4 @@
 import pytest
-from bson import ObjectId
-
 from app.schemas.mutation import FieldAction, FilterSelection, IdsSelection
 from app.schemas.query import FilterCondition, FilterOp
 from app.services.mutation_builder import (
@@ -9,6 +7,7 @@ from app.services.mutation_builder import (
     build_selection_match,
 )
 from app.services.query_builder import InvalidQueryError
+from bson import ObjectId
 
 COLUMNS = {
     "c0": {"key": "c0", "name": "id", "type": "integer"},
