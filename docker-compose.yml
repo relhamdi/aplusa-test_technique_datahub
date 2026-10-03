@@ -1,0 +1,41 @@
+name: datahub
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    env_file: ${ENV_FILE:-.env.dev}
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      target: prod
+    restart: unless-stopped
+    env_file: ${ENV_FILE:-.env.dev}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+
+  backend-test:
+    build:
+      context: ./backend
+      target: test
+    profiles: ["test"]    # only started on demand
+    env_file: ${ENV_FILE:-.env.dev}
+    environment:
+      # `environment` overrides `env_file`: tests never touch the real DB.
+      MONGO_DB: datahub_test
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+volumes:
+  mongo_data:
