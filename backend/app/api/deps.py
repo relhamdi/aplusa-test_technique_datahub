@@ -10,6 +10,7 @@ from app.repositories.rows import RowRepository
 from app.services.imports import ImportService
 from app.services.indexing import index_manager
 from app.services.ingestion import IngestionService
+from app.services.row_mutation import RowMutationService
 from app.services.rows import RowQueryService
 
 
@@ -35,7 +36,12 @@ def get_row_query_service(db: DbDep) -> RowQueryService:
     return RowQueryService(ImportRepository(db), RowRepository(db), index_manager)
 
 
+def get_row_mutation_service(db: DbDep) -> RowMutationService:
+    return RowMutationService(ImportRepository(db), RowRepository(db))
+
+
 # Reusable alias
 ImportServiceDep = Annotated[ImportService, Depends(get_import_service)]
 IngestionServiceDep = Annotated[IngestionService, Depends(get_ingestion_service)]
 RowQueryServiceDep = Annotated[RowQueryService, Depends(get_row_query_service)]
+RowMutationServiceDep = Annotated[RowMutationService, Depends(get_row_mutation_service)]
