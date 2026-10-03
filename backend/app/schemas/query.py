@@ -33,9 +33,15 @@ class RowQuery(BaseModel):
     filters: list[FilterCondition] = Field(default_factory=list, max_length=50)
     sort: SortSpec | None = None
     page: int = Field(default=1, ge=1)
-    # Sizes above 10 000 (up to 1M/10M) will go through a dedicated streaming endpoint, 
+    # Sizes above 10 000 (up to 1M/10M) will go through a dedicated streaming endpoint,
     # this endpoint stays a plain JSON response.
     page_size: Literal[10, 20, 50, 100, 1000, 5000, 10000] = 20
+
+
+class StreamQuery(RowQuery):
+    # Same filters/sort/page as the paginated endpoint,
+    # but huge sizes (1M, 10M) are allowed because the response is streamed.
+    page_size: Literal[10, 20, 50, 100, 1000, 5000, 10000, 1_000_000, 10_000_000] = 20
 
 
 class RowOut(BaseModel):
