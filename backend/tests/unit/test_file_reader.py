@@ -1,9 +1,10 @@
 import io
 
 import pytest
+from openpyxl import Workbook
+
 from app.services.detection import detect_file_types
 from app.services.file_reader import FileReadError
-from openpyxl import Workbook
 
 
 def run(content: bytes, name: str = "f.csv"):

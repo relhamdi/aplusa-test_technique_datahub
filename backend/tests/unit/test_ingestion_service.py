@@ -1,9 +1,10 @@
 import io
 
 import pytest
+from bson import ObjectId
+
 from app.schemas.ingestion import IngestMode
 from app.services.ingestion import IngestionService, SchemaMismatchError
-from bson import ObjectId
 
 
 class FakeRows:
