@@ -12,7 +12,7 @@ class Database:
         self._db: AsyncDatabase | None = None
 
     async def connect(self, settings: Settings) -> None:
-        self._client = AsyncMongoClient(settings.mongo_uri)
+        self._client = AsyncMongoClient(settings.mongo_uri, tz_aware=True)
         self._db = self._client[settings.mongo_db]
         await self._client.admin.command("ping")
 
