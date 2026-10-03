@@ -1,9 +1,10 @@
 import pytest
+from httpx import ASGITransport, AsyncClient
+
 from app.core.config import get_settings
 from app.core.database import database
 from app.core.indexes import ensure_base_indexes
 from app.main import app
-from httpx import ASGITransport, AsyncClient
 
 
 @pytest.fixture
