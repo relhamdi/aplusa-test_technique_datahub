@@ -12,6 +12,7 @@ from app.services.indexing import index_manager
 from app.services.ingestion import IngestionService
 from app.services.row_mutation import RowMutationService
 from app.services.rows import RowQueryService
+from app.services.stats import StatsService
 
 
 def get_db() -> AsyncDatabase:
@@ -40,8 +41,13 @@ def get_row_mutation_service(db: DbDep) -> RowMutationService:
     return RowMutationService(ImportRepository(db), RowRepository(db))
 
 
+def get_stats_service(db: DbDep) -> StatsService:
+    return StatsService(ImportRepository(db), RowRepository(db), index_manager)
+
+
 # Reusable alias
 ImportServiceDep = Annotated[ImportService, Depends(get_import_service)]
 IngestionServiceDep = Annotated[IngestionService, Depends(get_ingestion_service)]
 RowQueryServiceDep = Annotated[RowQueryService, Depends(get_row_query_service)]
 RowMutationServiceDep = Annotated[RowMutationService, Depends(get_row_mutation_service)]
+StatsServiceDep = Annotated[StatsService, Depends(get_stats_service)]
