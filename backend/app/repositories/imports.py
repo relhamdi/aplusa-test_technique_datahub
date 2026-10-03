@@ -75,8 +75,8 @@ class ImportRepository:
     ) -> dict[str, Any] | None:
         """Atomically point the import at its new rows collection.
 
-        Returns the document as it was BEFORE the swap, 
-        so the caller can drop the previous rows collection. 
+        Returns the document as it was BEFORE the swap,
+        so the caller can drop the previous rows collection.
         """
         fields["updated_at"] = datetime.now(UTC)
         return await self._col.find_one_and_update(
@@ -94,4 +94,15 @@ class ImportRepository:
                 "$inc": {"row_count": inserted},
                 "$set": {"last_import": last_import, "updated_at": datetime.now(UTC)},
             },
+        )
+
+    async def add_indexed_column(
+        self,
+        import_id: ObjectId,
+        collection: str,
+        key: str,
+    ) -> None:
+        await self._col.update_one(
+            {"_id": import_id, "rows_collection": collection},
+            {"$addToSet": {"indexed_columns": key}},
         )
