@@ -1,10 +1,10 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { json, stubApi } from "../test/api";
 import { renderWithProviders } from "../test/utils";
-import type { ImportSummary } from "../types/api";
+import type { ImportSummary, RowOut } from "../types/api";
 import { DataTab } from "./DataTab";
 
 const empty: ImportSummary = {
@@ -22,16 +22,23 @@ const populated: ImportSummary = {
   ...empty,
   columns: [
     { key: "c0", name: "id", type: "integer" },
-    { key: "c1", name: "price", type: "float" },
+    { key: "c1", name: "label", type: "string" },
+    { key: "c2", name: "flag", type: "boolean" },
   ],
-  row_count: 3,
+  row_count: 45,
 };
 
-const csv = () =>
-  new File(["id,price\n1,2.5\n"], "data.csv", { type: "text/csv" });
-
+const ROWS = "POST /api/imports/1/rows/query";
 const DETECT = "POST /api/imports/detect-types";
 const INGEST = "POST /api/imports/1/data";
+
+const sampleRows: RowOut[] = [
+  { id: "r1", values: { c0: 1, c1: "alpha", c2: true } },
+  { id: "r2", values: { c0: 2, c1: null, c2: false } },
+];
+
+const csv = () =>
+  new File(["id,label\n1,a\n"], "data.csv", { type: "text/csv" });
 const report = (extra = {}) => ({
   mode: "replace",
   filename: "data.csv",
@@ -41,13 +48,43 @@ const report = (extra = {}) => ({
   ...extra,
 });
 
-afterEach(() => vi.unstubAllGlobals());
+type Body = {
+  filters: unknown[];
+  sort: unknown;
+  page: number;
+  page_size: number;
+};
+
+// Stubs the rows endpoint and records every request body it receives.
+function stubRows(extra: Parameters<typeof stubApi>[0] = {}, total = 45) {
+  const bodies: Body[] = [];
+  const api = stubApi({
+    [ROWS]: (init) => {
+      const body = JSON.parse(init.body as string) as Body;
+      bodies.push(body);
+      return json({
+        rows: sampleRows,
+        total,
+        page: body.page,
+        page_size: body.page_size,
+        indexing: [],
+      });
+    },
+    ...extra,
+  });
+  return { ...api, bodies, last: () => bodies[bodies.length - 1] };
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  localStorage.clear();
+});
 
 async function openDialog(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "Importer un fichier" }));
 }
 
-describe("DataTab", () => {
+describe("DataTab: import dialog", () => {
   it("invites to import when the import has no data, and offers no append mode", async () => {
     const user = userEvent.setup();
     renderWithProviders(<DataTab item={empty} />);
@@ -58,9 +95,11 @@ describe("DataTab", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("summarises an import that already has data", () => {
+  it("summarizes an import that already has data", async () => {
+    stubRows();
     renderWithProviders(<DataTab item={populated} />);
-    expect(screen.getByText(/3 lignes, 2 colonnes/)).toBeInTheDocument();
+    expect(screen.getByText(/45 lignes, 3 colonnes/)).toBeInTheDocument();
+    await screen.findByText("alpha");
   });
 
   it("replace: detects types, lets the user correct them, then imports", async () => {
@@ -70,7 +109,7 @@ describe("DataTab", () => {
       [DETECT]: () =>
         json([
           { name: "id", type: "integer" },
-          { name: "price", type: "float" },
+          { name: "label", type: "string" },
         ]),
       [INGEST]: (init) => {
         ingestForm = init.body as FormData;
@@ -85,10 +124,9 @@ describe("DataTab", () => {
       screen.getByRole("button", { name: "Analyser le fichier" }),
     );
 
-    // Types step: detected values are preselected and editable.
-    const priceType = await screen.findByLabelText("Type de price");
-    expect(priceType).toHaveValue("float");
-    await user.selectOptions(priceType, "string");
+    const labelType = await screen.findByLabelText("Type de label");
+    expect(labelType).toHaveValue("string");
+    await user.selectOptions(screen.getByLabelText("Type de id"), "string");
     await user.click(screen.getByRole("button", { name: "Importer" }));
 
     expect(
@@ -103,13 +141,14 @@ describe("DataTab", () => {
     expect((ingestForm.get("file") as File).name).toBe("data.csv");
     // The corrected types are what gets sent, not the detected ones.
     expect(JSON.parse(ingestForm.get("types") as string)).toEqual([
-      { name: "id", type: "integer" },
-      { name: "price", type: "string" },
+      { name: "id", type: "string" },
+      { name: "label", type: "string" },
     ]);
   });
 
   it("replace: warns that existing data will be replaced", async () => {
     const user = userEvent.setup();
+    stubRows();
     renderWithProviders(<DataTab item={populated} />);
     await openDialog(user);
     expect(screen.getByText(/seront remplacées/)).toBeInTheDocument();
@@ -118,10 +157,12 @@ describe("DataTab", () => {
   it("append: imports directly, without detection and without types", async () => {
     const user = userEvent.setup();
     let form!: FormData;
-    const { calls } = stubApi({
+    const { calls } = stubRows({
       [INGEST]: (init) => {
         form = init.body as FormData;
-        return json(report({ mode: "append", rows_inserted: 1, row_count: 4 }));
+        return json(
+          report({ mode: "append", rows_inserted: 1, row_count: 46 }),
+        );
       },
     });
 
@@ -134,19 +175,20 @@ describe("DataTab", () => {
     expect(
       await screen.findByRole("heading", { name: "Import terminé" }),
     ).toBeInTheDocument();
-    expect(calls).toEqual([INGEST]); // no detect-types call
+    expect(calls).toContain(INGEST);
+    expect(calls).not.toContain(DETECT); // no detection on append
     expect(form.get("mode")).toBe("append");
     expect(form.get("types")).toBeNull(); // types are frozen by the import
   });
 
   it("append: shows the column mismatch and stays on the file step", async () => {
     const user = userEvent.setup();
-    stubApi({
+    stubRows({
       [INGEST]: () =>
         json(
           {
             detail:
-              "Columns do not match the import. Missing: ['price']; unexpected: ['zzz']",
+              "Columns do not match the import. Missing: ['label']; unexpected: ['zzz']",
           },
           409,
         ),
@@ -185,7 +227,7 @@ describe("DataTab", () => {
     expect(await screen.findByText("price : 3 valeur(s)")).toBeInTheDocument();
   });
 
-  it("shows a detection error and keeps the chosen file step", async () => {
+  it("shows a detection error and keeps the file step", async () => {
     const user = userEvent.setup();
     stubApi({ [DETECT]: () => json({ detail: "Cannot parse CSV" }, 400) });
 
@@ -225,5 +267,233 @@ describe("DataTab", () => {
     expect(
       screen.getByRole("button", { name: "Analyser le fichier" }),
     ).toBeDisabled();
+  });
+});
+
+describe("DataTab: table", () => {
+  it("builds the columns from the headers and formats the cells", async () => {
+    stubRows();
+    renderWithProviders(<DataTab item={populated} />);
+    expect(await screen.findByText("alpha")).toBeInTheDocument();
+    for (const name of ["id", "label", "flag"]) {
+      expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    }
+    // Body cells only: the boolean filter dropdown also has "Oui" / "Non" options.
+    const cells = screen.getAllByRole("cell").map((cell) => cell.textContent);
+    expect(cells).toContain("Oui");
+    expect(cells).toContain("Non");
+    expect(cells.filter((text) => text === "(vide)")).toHaveLength(1); // the null cell
+  });
+
+  it("sends the default query on first load", async () => {
+    const { last } = stubRows();
+    renderWithProviders(<DataTab item={populated} />);
+    await screen.findByText("alpha");
+    expect(last()).toEqual({ filters: [], sort: null, page: 1, page_size: 20 });
+  });
+
+  it("cycles the sort asc -> desc -> none, one request each", async () => {
+    const user = userEvent.setup();
+    const { last } = stubRows();
+    renderWithProviders(<DataTab item={populated} />);
+    await screen.findByText("alpha");
+
+    const header = screen.getByRole("button", { name: "id" });
+    await user.click(header);
+    await waitFor(() =>
+      expect(last().sort).toEqual({ column: "c0", direction: "asc" }),
+    );
+    expect(screen.getByRole("columnheader", { name: /id/ })).toHaveAttribute(
+      "aria-sort",
+      "ascending",
+    );
+
+    await user.click(header);
+    await waitFor(() =>
+      expect(last().sort).toEqual({ column: "c0", direction: "desc" }),
+    );
+
+    await user.click(header);
+    await waitFor(() => expect(last().sort).toBeNull());
+  });
+
+  it("filters after the debounce and goes back to page 1", async () => {
+    const user = userEvent.setup();
+    const { last } = stubRows();
+    renderWithProviders(<DataTab item={populated} />, { route: "/?page=2" });
+    await screen.findByText("alpha");
+    expect(last().page).toBe(2); // restored from the URL
+
+    await user.type(screen.getByLabelText("Valeur label"), "alp");
+    await waitFor(() =>
+      expect(last()).toMatchObject({
+        page: 1,
+        filters: [{ column: "c1", op: "contains", value: "alp" }],
+      }),
+    );
+  });
+
+  it("paginates through the server", async () => {
+    const user = userEvent.setup();
+    const { last } = stubRows();
+    renderWithProviders(<DataTab item={populated} />);
+    await screen.findByText("alpha");
+
+    expect(screen.getByText("Page 1 sur 3")).toBeInTheDocument();
+    expect(screen.getByText("1–20 sur 45")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Page précédente" }),
+    ).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Page suivante" }));
+    await waitFor(() => expect(last().page).toBe(2));
+    expect(await screen.findByText("Page 2 sur 3")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Dernière page" }));
+    await waitFor(() => expect(last().page).toBe(3));
+  });
+
+  it("changes the page size and goes back to page 1", async () => {
+    const user = userEvent.setup();
+    const { last } = stubRows();
+    renderWithProviders(<DataTab item={populated} />, { route: "/?page=2" });
+    await screen.findByText("alpha");
+
+    await user.selectOptions(screen.getByLabelText("Lignes par page"), "50");
+    await waitFor(() =>
+      expect(last()).toMatchObject({ page: 1, page_size: 50 }),
+    );
+  });
+
+  it("restores sort and page from the URL", async () => {
+    const { bodies } = stubRows();
+    renderWithProviders(<DataTab item={populated} />, {
+      route: "/?page=3&sort=c0:desc&size=10",
+    });
+    await screen.findByText("alpha");
+    expect(bodies[0]).toEqual({
+      filters: [],
+      sort: { column: "c0", direction: "desc" },
+      page: 3,
+      page_size: 10,
+    });
+  });
+
+  it("restores the state saved for this import when the URL is empty", async () => {
+    const { bodies } = stubRows();
+    // Same signature as the columns of `populated`.
+    const signature = populated.columns
+      .map((c) => `${c.key}:${c.name}:${c.type}`)
+      .join("|");
+    localStorage.setItem(
+      "datahub:table:1",
+      JSON.stringify({
+        signature,
+        state: { page: 2, pageSize: 50, sort: null, filters: [] },
+      }),
+    );
+    renderWithProviders(<DataTab item={populated} />);
+    await screen.findByText("alpha");
+    expect(bodies[0]).toMatchObject({ page: 2, page_size: 50 });
+  });
+
+  it("shows a dedicated message and a way out when no row matches the filters", async () => {
+    const user = userEvent.setup();
+    const { last } = stubRows({}, 0);
+    // The filter must really be in the URL: a sort alone is not a "filtered" view.
+    const filters = encodeURIComponent(
+      JSON.stringify([{ column: "c0", op: "gt", value: "100" }]),
+    );
+    renderWithProviders(<DataTab item={populated} />, {
+      route: `/?sort=c0:asc&filters=${filters}`,
+    });
+
+    expect(
+      await screen.findByText("Aucune ligne ne correspond aux filtres."),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Réinitialiser filtres et tri" }),
+    );
+    await waitFor(() =>
+      expect(last()).toMatchObject({ filters: [], sort: null }),
+    );
+  });
+
+  it("says the import is empty when there is no filter", async () => {
+    stubRows({}, 0);
+    renderWithProviders(<DataTab item={populated} />);
+    expect(
+      await screen.findByText("Cet import ne contient aucune ligne."),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the API error without crashing", async () => {
+    stubApi({ [ROWS]: () => json({ detail: "Unknown column" }, 422) });
+    renderWithProviders(<DataTab item={populated} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Unknown column",
+    );
+  });
+
+  it("does not call the API for a page size that needs the streaming mode", async () => {
+    const user = userEvent.setup();
+    const { calls, last } = stubRows();
+    renderWithProviders(<DataTab item={populated} />, {
+      route: "/?size=1000000",
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("mode flux");
+    expect(calls).not.toContain(ROWS);
+
+    await user.click(
+      screen.getByRole("button", { name: "Revenir à 20 lignes par page" }),
+    );
+    await waitFor(() => expect(last().page_size).toBe(20));
+  });
+
+  it("replace resets the table state, append keeps it", async () => {
+    const user = userEvent.setup();
+    const route = "/?page=3&sort=c0:desc";
+
+    // Append: the schema is unchanged, the user's view stays.
+    const append = stubRows({
+      [INGEST]: () => json(report({ mode: "append", row_count: 46 })),
+    });
+    const first = renderWithProviders(<DataTab item={populated} />, { route });
+    await screen.findByText("alpha");
+    await openDialog(user);
+    await user.click(screen.getByLabelText("Ajouter à la suite"));
+    await user.upload(screen.getByLabelText(/Fichier/), csv());
+    await user.click(screen.getByRole("button", { name: "Importer" }));
+    await screen.findByRole("heading", { name: "Import terminé" });
+    expect(append.last()).toMatchObject({
+      page: 3,
+      sort: { column: "c0", direction: "desc" },
+    });
+    first.unmount();
+    vi.unstubAllGlobals();
+
+    // Replace: every column may have changed, back to the default view.
+    const replace = stubRows({
+      [DETECT]: () =>
+        json([
+          { name: "id", type: "integer" },
+          { name: "label", type: "string" },
+          { name: "flag", type: "boolean" },
+        ]),
+      [INGEST]: () => json(report({ mode: "replace" })),
+    });
+    renderWithProviders(<DataTab item={populated} />, { route });
+    await screen.findByText("alpha");
+    await openDialog(user);
+    await user.upload(screen.getByLabelText(/Fichier/), csv());
+    await user.click(
+      screen.getByRole("button", { name: "Analyser le fichier" }),
+    );
+    await user.click(await screen.findByRole("button", { name: "Importer" }));
+    await screen.findByRole("heading", { name: "Import terminé" });
+    await waitFor(() =>
+      expect(replace.last()).toMatchObject({ page: 1, sort: null }),
+    );
   });
 });
