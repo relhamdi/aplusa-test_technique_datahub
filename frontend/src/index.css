@@ -197,40 +197,73 @@ fieldset.field label {
   border-bottom: 1px solid #e5e7eb;
 }
 
+/* Virtualized grid: a fixed-height scroll area; only visible rows are in the DOM. */
 .data-scroll {
+  height: min(70vh, 640px);
   overflow: auto;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   background: #fff;
 }
 
-.data-table {
+.data-scroll[data-refreshing='true'] .grid-body {
+  opacity: 0.55;
+}
+
+.grid-inner {
+  position: relative;
+}
+
+.grid-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.grid-head-cell {
+  padding: 0.35rem 0.6rem;
+  text-align: left;
+}
+
+.grid-body {
+  position: relative;
+}
+
+/* Rows are absolutely positioned by the virtualizer (translateY). */
+.data-row {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
-  border-collapse: collapse;
+  align-items: center;
+  border-bottom: 1px solid #f3f4f6;
   font-size: 0.9rem;
 }
 
-.data-table th,
-.data-table td {
-  padding: 0.35rem 0.6rem;
-  text-align: left;
-  border-bottom: 1px solid #f3f4f6;
+.grid-cell {
+  padding: 0 0.6rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 28px;
 }
 
-.data-table thead th {
-  background: #f9fafb;
-  position: sticky;
-  top: 0;
-}
-
-.data-table td.num {
+.grid-cell.num {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
-.data-table[data-refreshing='true'] {
-  opacity: 0.55;
+.stream-status {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.stream-status progress {
+  flex: 1;
 }
 
 .sort-button {
@@ -244,10 +277,6 @@ fieldset.field label {
 
 .sort-icon {
   color: #9ca3af;
-}
-
-.filter-row th {
-  font-weight: normal;
 }
 
 .filter-cell {
