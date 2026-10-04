@@ -12,3 +12,149 @@
 body {
   margin: 0;
 }
+
+.page {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+button {
+  font: inherit;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+button.danger {
+  color: #b91c1c;
+  border-color: #fca5a5;
+}
+
+.error {
+  color: #b91c1c;
+}
+
+.import-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.import-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.import-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.import-name {
+  font-weight: 600;
+}
+
+.import-description {
+  margin: 0.2rem 0;
+  color: #4b5563;
+}
+
+.import-count {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.import-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+/* touch-action: none lets touch screens drag from the handle instead of scrolling. */
+.handle {
+  cursor: grab;
+  touch-action: none;
+  border: none;
+  background: transparent;
+  font-size: 1.2rem;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: grid;
+  place-items: center;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 10px;
+  padding: 1.5rem;
+  width: min(480px, 92vw);
+}
+
+.field {
+  display: grid;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.field input,
+.field textarea {
+  font: inherit;
+  padding: 0.4rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid #e5e7eb;
+  margin: 1rem 0;
+}
+
+.tabs button {
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+}
+
+.tabs button[aria-selected='true'] {
+  border-bottom-color: #2563eb;
+  font-weight: 600;
+}
