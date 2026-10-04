@@ -5,6 +5,7 @@ import type {
   FilterOp,
 } from "../types/api";
 import { NO_VALUE_OPS } from "./filterOps";
+import { isNumberText } from "./numbers";
 
 export interface FilterDraft {
   op: FilterOp;
@@ -39,19 +40,11 @@ export function draftFromFilter(
   };
 }
 
-// Same lexical rules as the backend detection: a decimal comma is accepted.
-const INTEGER_RE = /^[+-]?\d+$/;
-const FLOAT_RE = /^[+-]?(\d+([.,]\d*)?|[.,]\d+)$/;
-
-function isNumber(type: ColumnType, raw: string): boolean {
-  return (type === "integer" ? INTEGER_RE : FLOAT_RE).test(raw);
-}
-
 const toNumber = (raw: string): number => Number(raw.replace(",", "."));
 
 /**
  * Turns what the user typed into a filter. Numbers are sent as the typed string:
- * the backend converts them with the same rules as the ingestion 
+ * the backend converts them with the same rules as the ingestion
  * (no precision loss on 64-bit integers, decimal comma accepted).
  */
 export function validateDraft(column: Column, draft: FilterDraft): DraftResult {
@@ -65,7 +58,10 @@ export function validateDraft(column: Column, draft: FilterDraft): DraftResult {
   if (op === "between") {
     const valueTo = draft.valueTo.trim();
     if (!value || !valueTo) return NONE; // incomplete: wait for both bounds
-    if (!isNumber(column.type, value) || !isNumber(column.type, valueTo))
+    if (
+      !isNumberText(column.type, value) ||
+      !isNumberText(column.type, valueTo)
+    )
       return INVALID;
     if (toNumber(value) > toNumber(valueTo)) return INVALID;
     return {
@@ -82,6 +78,6 @@ export function validateDraft(column: Column, draft: FilterDraft): DraftResult {
       invalid: false,
     };
   }
-  if (isNumeric && !isNumber(column.type, value)) return INVALID;
+  if (isNumeric && !isNumberText(column.type, value)) return INVALID;
   return { filter: { column: column.key, op, value }, invalid: false };
 }
