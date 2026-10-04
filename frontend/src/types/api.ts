@@ -56,3 +56,55 @@ export interface IngestionReport {
   // Only columns with at least one value that could not be converted.
   rejected: RejectedColumn[];
 }
+
+export const FILTER_OPS = [
+  "equals",
+  "contains",
+  "starts_with",
+  "gt",
+  "lt",
+  "between",
+  "is_empty",
+  "is_not_empty",
+] as const;
+export type FilterOp = (typeof FILTER_OPS)[number];
+
+export interface FilterCondition {
+  column: string; // technical key ("c0"), not the display name
+  op: FilterOp;
+  value?: unknown;
+  value_to?: unknown; // upper bound, only for "between"
+}
+
+export interface SortSpec {
+  column: string;
+  direction: "asc" | "desc";
+}
+
+// Imposed sizes. 
+// Above 10 000 only served them through the streaming endpoint.
+export const PAGE_SIZES = [
+  10, 20, 50, 100, 1000, 5000, 10000, 1_000_000, 10_000_000,
+] as const;
+export type PageSize = (typeof PAGE_SIZES)[number];
+
+export interface RowQuery {
+  filters: FilterCondition[];
+  sort: SortSpec | null;
+  page: number;
+  page_size: PageSize;
+}
+
+export interface RowOut {
+  id: string;
+  values: Record<string, unknown>; // keyed by technical column key
+}
+
+export interface PageOut {
+  rows: RowOut[];
+  total: number;
+  page: number;
+  page_size: number;
+  // Column keys whose index is still being built (query ran anyway).
+  indexing: string[];
+}
