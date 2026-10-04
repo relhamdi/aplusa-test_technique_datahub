@@ -9,12 +9,12 @@ import {
 } from "@dnd-kit/core";
 import {
   SortableContext,
-  arrayMove,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 
 import type { ImportSummary } from "../types/api";
+import { reorderedIds } from "../utils/reorder";
 import { ImportListItem } from "./ImportListItem";
 
 interface ImportListProps {
@@ -40,11 +40,12 @@ export function ImportList({
   );
 
   function handleDragEnd({ active, over }: DragEndEvent) {
-    if (!over || active.id === over.id) return;
-    const from = items.findIndex((item) => item.id === active.id);
-    const to = items.findIndex((item) => item.id === over.id);
-    // The backend expects the complete ordered list of ids, not a single move.
-    onReorder(arrayMove(items, from, to).map((item) => item.id));
+    const ids = reorderedIds(
+      items,
+      String(active.id),
+      over ? String(over.id) : null,
+    );
+    if (ids) onReorder(ids);
   }
 
   return (
