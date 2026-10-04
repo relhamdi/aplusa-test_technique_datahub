@@ -1,4 +1,4 @@
-import { MAX_PAGINATED_SIZE, PAGE_SIZES, type PageSize } from "../types/api";
+import { PAGE_SIZES, type PageSize } from "../types/api";
 import { pageCount } from "../utils/tableState";
 
 interface PaginationProps {
@@ -73,15 +73,10 @@ export function Pagination({
           }
         >
           {PAGE_SIZES.map((size) => (
-            // Sizes above 10 000 are enabled by the streaming mode.
-            <option
-              key={size}
-              value={size}
-              disabled={size > MAX_PAGINATED_SIZE}
-            >
+            <option key={size} value={size}>
               {fr(size)}
             </option>
-          ))}
+          ))}{" "}
         </select>
       </label>
     </nav>
