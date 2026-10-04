@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
+import { DataTab } from "../components/DataTab";
 import { useImport } from "../hooks/useImports";
 import { ApiError } from "../services/http";
 
@@ -45,11 +46,11 @@ export function ImportPage() {
           </div>
           <div role="tabpanel">
             {tab === "data" ? (
-              <p>Tableau des données : TODO.</p>
+              <DataTab item={data} />
             ) : (
               <p>Statistiques : TODO.</p>
             )}
-          </div>
+          </div>{" "}
         </>
       )}
     </main>
