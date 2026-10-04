@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { importsService } from "../services/imports";
 import type { ImportSummary, ImportUpdate } from "../types/api";
+import { clearSavedState } from "../utils/tableStorage";
 import { importsKey } from "./useImports";
 
 export function useCreateImport() {
@@ -27,7 +28,10 @@ export function useDeleteImport() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: importsService.remove,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: importsKey }),
+    onSuccess: (_data, id) => {
+      clearSavedState(id);
+      return queryClient.invalidateQueries({ queryKey: importsKey });
+    },
   });
 }
 
