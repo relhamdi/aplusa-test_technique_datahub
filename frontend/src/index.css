@@ -310,3 +310,19 @@ fieldset.field label {
   gap: 0.5rem;
   margin-top: 0.75rem;
 }
+
+.modal-scroll {
+  max-height: 55vh;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.actions-cell button {
+  padding: 0 0.5rem;
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.field .error {
+  font-size: 0.85rem;
+}
