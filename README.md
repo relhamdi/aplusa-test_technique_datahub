@@ -6,14 +6,14 @@ Application web de gestion d'imports de données (CSV / XLSX) inspirée de Datah
 - **Frontend** : React + TypeScript (voir section Frontend, *WIP*)
 - **Infra** : Docker, un unique `docker-compose.yml`, configuration par fichiers `.env`
 
-> Statut : le backend est complet et testé. Le frontend est en cours de développement.
-
+> Statut : backend complet et testé ; frontend : liste des imports, import de fichier, tableau de données (tri, filtres, pagination, flux), édition et opérations par lot. L'onglet Statistiques est en cours (voir « Fonctionnalités »).
 ---
 
 ## Sommaire
 
 - [Test Technique - Datahub simplifié](#test-technique---datahub-simplifié)
   - [Sommaire](#sommaire)
+  - [Fonctionnalités](#fonctionnalités)
   - [1. Architecture](#1-architecture)
     - [Couches du backend](#couches-du-backend)
   - [2. Choix techniques](#2-choix-techniques)
@@ -34,6 +34,24 @@ Application web de gestion d'imports de données (CSV / XLSX) inspirée de Datah
   - [10. CI](#10-ci)
   - [11. Limitations connues](#11-limitations-connues)
   - [12. Frontend](#12-frontend)
+    - [Organisation](#organisation)
+    - [Choix techniques](#choix-techniques)
+    - [Mesures](#mesures)
+    - [Stratégie de tests](#stratégie-de-tests)
+    - [Limitations connues (frontend)](#limitations-connues-frontend)
+
+## Fonctionnalités
+
+| Fonctionnalité du sujet                                                               | Backend | Frontend |
+| ------------------------------------------------------------------------------------- | ------- | -------- |
+| Liste des imports (vide au démarrage), création, édition, suppression, réorganisation | ✅       | ✅        |
+| Import CSV/XLSX, réimport (remplacement ou ajout)                                     | ✅       | ✅        |
+| Détection des types et correction par l'utilisateur                                   | ✅       | ✅        |
+| Tableau dynamique, tri, filtres par colonne, pagination (10 à 10 000 000)             | ✅       | ✅        |
+| État conservé (page, tri, filtres) au rechargement et au retour dans l'import         | n/a     | ✅        |
+| Édition d'une ligne (validation, annulation, confirmation)                            | ✅       | ✅        |
+| Sélection multiple, suppression et édition par lot (conserver / modifier / vider)     | ✅       | ✅        |
+| Onglet Statistiques                                                                   | ✅       | ⏳        |
 
 ---
 
@@ -86,19 +104,19 @@ Principes appliqués :
 
 ## 2. Choix techniques
 
-| Sujet | Choix | Pourquoi |
-|---|---|---|
-| Client Mongo | `AsyncMongoClient` (PyMongo ≥ 4.9) | Async natif |
-| Une collection par import | `rows_<import_id>_<uuid8>` | La limite de 64 index par collection serait vite atteinte avec une collection partagée ; suppression et remplacement d'un import triviaux |
-| Clés techniques `c0, c1…` | Les noms réels vivent dans `imports.columns` | Les en-têtes peuvent contenir `.`, `$` ou des espaces, problématiques comme noms de champs Mongo |
-| Valeurs typées natives | `bool`, `int`, `double`, `string`, vide = `null` | Tris et agrégations corrects côté Mongo |
-| Lecture fichier | `pandas.read_csv(dtype=str, chunksize=…)` | Mémoire bornée ; Pandas ne devine rien, le typage est le nôtre |
-| Détection des types | Fichier **entier** en streaming, accumulateur à 4 drapeaux par colonne | Pas d'échantillon qui raterait une valeur invalide en fin de fichier ; mémoire constante |
-| Pagination | `skip/limit` | Permet « aller à la page N » ; limite assumée sur les `skip` profonds |
-| Grandes pages (1 M, 10 M) | Streaming NDJSON | Jamais 10 M d'objets en mémoire côté serveur |
-| Sélection multiple | Mode `ids` ou mode `filter` + `excluded_ids` | « Tout sélectionner » sur le résultat filtré sans jamais matérialiser 1 M d'identifiants |
-| Persistance de l'état UI | URL + localStorage (frontend) | Pas de besoin backend, état partageable par URL |
-| Un Dockerfile par service | `backend/Dockerfile`, `frontend/Dockerfile` | Plus propre qu'un Dockerfile unique ; un seul `docker-compose.yml` lance tout |
+| Sujet                     | Choix                                                                  | Pourquoi                                                                                                                                  |
+| ------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Client Mongo              | `AsyncMongoClient` (PyMongo ≥ 4.9)                                     | Async natif                                                                                                                               |
+| Une collection par import | `rows_<import_id>_<uuid8>`                                             | La limite de 64 index par collection serait vite atteinte avec une collection partagée ; suppression et remplacement d'un import triviaux |
+| Clés techniques `c0, c1…` | Les noms réels vivent dans `imports.columns`                           | Les en-têtes peuvent contenir `.`, `$` ou des espaces, problématiques comme noms de champs Mongo                                          |
+| Valeurs typées natives    | `bool`, `int`, `double`, `string`, vide = `null`                       | Tris et agrégations corrects côté Mongo                                                                                                   |
+| Lecture fichier           | `pandas.read_csv(dtype=str, chunksize=…)`                              | Mémoire bornée ; Pandas ne devine rien, le typage est le nôtre                                                                            |
+| Détection des types       | Fichier **entier** en streaming, accumulateur à 4 drapeaux par colonne | Pas d'échantillon qui raterait une valeur invalide en fin de fichier ; mémoire constante                                                  |
+| Pagination                | `skip/limit`                                                           | Permet « aller à la page N » ; limite assumée sur les `skip` profonds                                                                     |
+| Grandes pages (1 M, 10 M) | Streaming NDJSON                                                       | Jamais 10 M d'objets en mémoire côté serveur                                                                                              |
+| Sélection multiple        | Mode `ids` ou mode `filter` + `excluded_ids`                           | « Tout sélectionner » sur le résultat filtré sans jamais matérialiser 1 M d'identifiants                                                  |
+| Persistance de l'état UI  | URL + localStorage (frontend)                                          | Pas de besoin backend, état partageable par URL                                                                                           |
+| Un Dockerfile par service | `backend/Dockerfile`, `frontend/Dockerfile`                            | Plus propre qu'un Dockerfile unique ; un seul `docker-compose.yml` lance tout                                                             |
 
 ### Règles de typage
 
@@ -111,12 +129,12 @@ Principes appliqués :
 
 ### Import : `replace` et `append`
 
-| | `replace` | `append` |
-|---|---|---|
-| Colonnes du fichier | Libres | Doivent correspondre à celles de l'import (par nom, ordre libre) |
-| Types | Détectés puis corrigeables | **Figés** |
-| Écart de colonnes | n/a | Refus `409` listant colonnes manquantes et en trop, rien n'est écrit |
-| Valeur non convertible | `null` + rapport par colonne | `null` + rapport par colonne |
+|                        | `replace`                    | `append`                                                             |
+| ---------------------- | ---------------------------- | -------------------------------------------------------------------- |
+| Colonnes du fichier    | Libres                       | Doivent correspondre à celles de l'import (par nom, ordre libre)     |
+| Types                  | Détectés puis corrigeables   | **Figés**                                                            |
+| Écart de colonnes      | n/a                          | Refus `409` listant colonnes manquantes et en trop, rien n'est écrit |
+| Valeur non convertible | `null` + rapport par colonne | `null` + rapport par colonne                                         |
 
 - **Atomicité du `replace`** : les nouvelles lignes sont insérées dans une **nouvelle collection**. Une fois tout chargé, un seul `find_one_and_update` (atomique) rebascule `rows_collection`, puis l'ancienne collection est supprimée. Par exemple, un échec à la ligne 800 000 supprime la nouvelle collection et l'import reste intact.
 - **Rollback de l'`append`** : chaque ajout est marqué par un `ingest_id` ; en cas d'échec, `delete_many({ingest_id})`.
@@ -150,16 +168,18 @@ ENV_FILE=.env.prod docker compose --env-file .env.prod up -d --build
 
 > Les trois fichiers `.env.dev`, `.env.preprod`, `.env.prod` sont versionnés pour faciliter l'évaluation : **ils ne contiennent aucun vrai secret et doivent être remplacés par des fichiers `*.example` pour un usage réel**.
 
-| Variable | Rôle |
-|---|---|
-| `MONGO_URI`, `MONGO_DB` | Connexion à MongoDB |
-| `MONGO_INITDB_ROOT_USERNAME/PASSWORD` | Compte root initial de Mongo |
-| `CORS_ORIGINS` | Origines autorisées (liste séparée par des virgules) |
-| `IMPORT_CHUNK_SIZE` | Lignes par chunk à l'import (défaut 50 000) |
-| `MAX_UPLOAD_MB` | Taille maximale d'un fichier (défaut 500) |
-| `LOG_LEVEL`, `APP_ENV` | Journalisation et environnement |
+| Variable                              | Rôle                                                 |
+| ------------------------------------- | ---------------------------------------------------- |
+| `MONGO_URI`, `MONGO_DB`               | Connexion à MongoDB                                  |
+| `MONGO_INITDB_ROOT_USERNAME/PASSWORD` | Compte root initial de Mongo                         |
+| `CORS_ORIGINS`                        | Origines autorisées (liste séparée par des virgules) |
+| `IMPORT_CHUNK_SIZE`                   | Lignes par chunk à l'import (défaut 50 000)          |
+| `MAX_UPLOAD_MB`                       | Taille maximale d'un fichier (défaut 500)            |
+| `LOG_LEVEL`, `APP_ENV`                | Journalisation et environnement                      |
 
-Documentation interactive de l'API : `/docs` (Swagger).
+- Documentation interactive de l'API : `/docs` (Swagger).
+- API ouverte sur le port 8000 ([localhost:8000](http://localhost:8000)) ; Frontend ouvert sur le port 3000 ([localhost:3000](http://localhost:3000))
+
 
 ### Développement local du backend
 
@@ -189,20 +209,20 @@ Les fichiers sont écrits dans `backend/output/` (non versionnés).
 
 ## 4. API
 
-| Méthode | Route | Rôle |
-|---|---|---|
-| `GET` | `/health` | Santé de l'API et de Mongo |
-| `GET` / `POST` | `/imports` | Lister / créer |
-| `GET` / `PATCH` / `DELETE` | `/imports/{id}` | Détail / renommer / supprimer (métadonnées et lignes) |
-| `PUT` | `/imports/reorder` | Réordonner (liste complète des ids) |
-| `POST` | `/imports/detect-types` | Détection des types d'un fichier (sans état, rien n'est stocké) |
-| `POST` | `/imports/{id}/data` | Import `replace` ou `append`, avec rapport |
-| `POST` | `/imports/{id}/rows/query` | Page de lignes (10 à 10 000) avec filtres, tri, total |
-| `POST` | `/imports/{id}/rows/stream` | Page en streaming NDJSON (jusqu'à 10 000 000) |
-| `PATCH` | `/imports/{id}/rows/{row_id}` | Édition d'une ligne |
-| `POST` | `/imports/{id}/rows/batch-update` | Édition multiple (`keep` / `set` / `clear` par colonne) |
-| `POST` | `/imports/{id}/rows/batch-delete` | Suppression multiple |
-| `POST` | `/imports/{id}/stats` | Statistiques d'une colonne |
+| Méthode                    | Route                             | Rôle                                                            |
+| -------------------------- | --------------------------------- | --------------------------------------------------------------- |
+| `GET`                      | `/health`                         | Santé de l'API et de Mongo                                      |
+| `GET` / `POST`             | `/imports`                        | Lister / créer                                                  |
+| `GET` / `PATCH` / `DELETE` | `/imports/{id}`                   | Détail / renommer / supprimer (métadonnées et lignes)           |
+| `PUT`                      | `/imports/reorder`                | Réordonner (liste complète des ids)                             |
+| `POST`                     | `/imports/detect-types`           | Détection des types d'un fichier (sans état, rien n'est stocké) |
+| `POST`                     | `/imports/{id}/data`              | Import `replace` ou `append`, avec rapport                      |
+| `POST`                     | `/imports/{id}/rows/query`        | Page de lignes (10 à 10 000) avec filtres, tri, total           |
+| `POST`                     | `/imports/{id}/rows/stream`       | Page en streaming NDJSON (jusqu'à 10 000 000)                   |
+| `PATCH`                    | `/imports/{id}/rows/{row_id}`     | Édition d'une ligne                                             |
+| `POST`                     | `/imports/{id}/rows/batch-update` | Édition multiple (`keep` / `set` / `clear` par colonne)         |
+| `POST`                     | `/imports/{id}/rows/batch-delete` | Suppression multiple                                            |
+| `POST`                     | `/imports/{id}/stats`             | Statistiques d'une colonne                                      |
 
 ### Format du flux NDJSON
 
@@ -260,11 +280,11 @@ Le rapport de rejets est une **liste** et non un dictionnaire, car les noms de c
 
 ## 6. Index MongoDB : stratégie et justification
 
-| Index | Collection | Créé | Justification |
-|---|---|---|---|
-| `_id` | rows | Automatique | Ordre par défaut et départage des tris |
-| `idx_imports_order` `{order: 1}` | imports | Au démarrage | Page d'accueil triée par ordre manuel |
-| `idx_d_cN` `{d.cN: 1, _id: 1}` | rows | **À la demande** | Tri, filtres sélectifs et agrégations sur la colonne `cN` |
+| Index                            | Collection | Créé             | Justification                                             |
+| -------------------------------- | ---------- | ---------------- | --------------------------------------------------------- |
+| `_id`                            | rows       | Automatique      | Ordre par défaut et départage des tris                    |
+| `idx_imports_order` `{order: 1}` | imports    | Au démarrage     | Page d'accueil triée par ordre manuel                     |
+| `idx_d_cN` `{d.cN: 1, _id: 1}`   | rows       | **À la demande** | Tri, filtres sélectifs et agrégations sur la colonne `cN` |
 
 Raisonnement :
 
@@ -302,8 +322,6 @@ Raisonnement :
 - Édition multiple : un seul `update_many` ; mode `filter` avec `$nin` sans jamais matérialiser les identifiants.
 - `row_count` maintenu par `$inc` pour garder le total sans filtre exact.
 
-**Frontend** (*à compléter* : debounce, virtualisation, lecture incrémentale du flux).
-
 ---
 
 ## 8. Mesures de performance
@@ -312,18 +330,18 @@ Jeu de données : 1 000 000 de lignes × 9 colonnes (généré par `scripts/gene
 Machine : *Windows 11*, CPU: *AMD Ryzen 7 5700X*, disque SSD. 
 `IMPORT_CHUNK_SIZE=50000`.
 
-| Opération | Résultat |
-|---|---|
-| `detect-types` (fichier de 1 M de lignes) | 5,3 s |
-| Import `replace` (détection incluse) | 20,4 s |
-| Mémoire du backend pendant l'import | ~100 → ~200 Mo, stable ; CPU ~100 % (un cœur) |
-| Tri décroissant d'une colonne float, sans index | 1,65 s |
-| Même tri, avec index | 0,19 s |
-| Total filtré (`category = books`, 124 855 lignes), avec index | 0,25 s |
-| Édition multiple (124 855 lignes sélectionnées) | 2,4 s |
-| Statistiques d'une colonne (1 M de lignes) | 1,4 à 2,6 s |
-| Flux NDJSON de 1 000 000 de lignes | 11 à 14 s, mémoire backend plate |
-| Page de 10 000 lignes, page 1 puis page 90 (`skip` = 890 000) | 0,43 s puis 0,73 s |
+| Opération                                                     | Résultat                                      |
+| ------------------------------------------------------------- | --------------------------------------------- |
+| `detect-types` (fichier de 1 M de lignes)                     | 5,3 s                                         |
+| Import `replace` (détection incluse)                          | 20,4 s                                        |
+| Mémoire du backend pendant l'import                           | ~100 → ~200 Mo, stable ; CPU ~100 % (un cœur) |
+| Tri décroissant d'une colonne float, sans index               | 1,65 s                                        |
+| Même tri, avec index                                          | 0,19 s                                        |
+| Total filtré (`category = books`, 124 855 lignes), avec index | 0,25 s                                        |
+| Édition multiple (124 855 lignes sélectionnées)               | 2,4 s                                         |
+| Statistiques d'une colonne (1 M de lignes)                    | 1,4 à 2,6 s                                   |
+| Flux NDJSON de 1 000 000 de lignes                            | 11 à 14 s, mémoire backend plate              |
+| Page de 10 000 lignes, page 1 puis page 90 (`skip` = 890 000) | 0,43 s puis 0,73 s                            |
 
 Remarques :
 
@@ -332,13 +350,13 @@ Remarques :
 
 **Preuve d'utilisation de l'index** (`explain("executionStats")` sur 1 M de lignes, tri sur `c2`, `limit(20)`) :
 
-| Requête | Plan | Clés examinées | Documents examinés | Temps |
-|---|---|---|---|---|
-| Tri desc avec index `idx_d_c2` | IXSCAN → FETCH → LIMIT | 20 | 20 | 3 ms |
-| Même tri, collection scan forcé (`hint $natural`) | COLLSCAN → SORT | 0 | 1 000 000 | 1 280 ms |
-| Filtre `category = books` avec `idx_d_c6` | IXSCAN → FETCH → LIMIT | 20 | 20 | < 1 ms |
-| Tri asc avec le même index | IXSCAN → FETCH → LIMIT | 20 | 20 | < 1 ms |
-| Tri `c2` desc / `_id` asc (directions mixtes) | COLLSCAN → SORT | 0 | 1 000 000 | 515 ms |
+| Requête                                           | Plan                   | Clés examinées | Documents examinés | Temps    |
+| ------------------------------------------------- | ---------------------- | -------------- | ------------------ | -------- |
+| Tri desc avec index `idx_d_c2`                    | IXSCAN → FETCH → LIMIT | 20             | 20                 | 3 ms     |
+| Même tri, collection scan forcé (`hint $natural`) | COLLSCAN → SORT        | 0              | 1 000 000          | 1 280 ms |
+| Filtre `category = books` avec `idx_d_c6`         | IXSCAN → FETCH → LIMIT | 20             | 20                 | < 1 ms   |
+| Tri asc avec le même index                        | IXSCAN → FETCH → LIMIT | 20             | 20                 | < 1 ms   |
+| Tri `c2` desc / `_id` asc (directions mixtes)     | COLLSCAN → SORT        | 0              | 1 000 000          | 515 ms   |
 
 Un même index `(d.c2, _id)` sert le tri croissant et décroissant à condition que `_id` suive la direction de la colonne. Avec des directions mixtes, MongoDB ne peut plus lire l'index et retombe sur un parcours complet suivi d'un tri : c'est la raison du départage `_id` de même direction.
 
@@ -347,12 +365,10 @@ Un même index `(d.c2, _id)` sert le tri croissant et décroissant à condition 
 
 ## 9. Stratégie de tests
 
-| Niveau | Outils | Contenu |
-|---|---|---|
-| Unitaires backend | pytest | Détection de types, conversion, lecture CSV/XLSX (séparateurs, encodage, BOM, en-têtes), builders de filtres/tri/pagination, builders de statistiques, builders de mutations, services avec **faux repositories**, encodage NDJSON |
-| Intégration backend | pytest + httpx (`ASGITransport`) + **vrai MongoDB** | Endpoints FastAPI de bout en bout : CRUD, détection, import `replace`/`append`, requêtes, édition, batch, statistiques, streaming |
-| Unitaires frontend | Vitest + React Testing Library | *à compléter* |
-| Intégration frontend | Vitest + React Testing Library | *à compléter* |
+| Niveau              | Outils                                              | Contenu                                                                                                                                                                                                                            |
+| ------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unitaires backend   | pytest                                              | Détection de types, conversion, lecture CSV/XLSX (séparateurs, encodage, BOM, en-têtes), builders de filtres/tri/pagination, builders de statistiques, builders de mutations, services avec **faux repositories**, encodage NDJSON |
+| Intégration backend | pytest + httpx (`ASGITransport`) + **vrai MongoDB** | Endpoints FastAPI de bout en bout : CRUD, détection, import `replace`/`append`, requêtes, édition, batch, statistiques, streaming                                                                                                  |
 
 Choix notables :
 
@@ -383,8 +399,13 @@ Le Dockerfile du backend est multi-stage : `base` (dépendances de production), 
 
 Workflow GitHub Actions (`.github/workflows/ci.yaml`) :
 
-- **backend** : `ruff`, `pytest` avec un service MongoDB réel et `--cov-fail-under=70` ;
-- **docker** : validation du `docker-compose.yml` et build de l'image `prod` (sans push).
+- **backend** : installation des dépendances avec `uv`, vérification du code avec `ruff`, puis exécution des tests `pytest` avec un service MongoDB réel et `--cov-fail-under=70` ;
+
+- **frontend** : installation des dépendances avec `npm ci`, vérification du code avec `npm run lint`, exécution des tests avec couverture via `npm run coverage` (seuils de couverture à 70 %), puis vérification du build de production avec `npm run build` ;
+
+- **docker** : validation du `docker-compose.yml` et build des images de production (`backend` et `frontend`), sans push vers un registre. Les builds utilisent le cache GitHub Actions.
+
+Le CI est exécuté sur les `push` vers `main` et `develop`, ainsi que sur les Pull Requests.
 
 Le CD (déploiement) n'est pas mis en place faute d'environnement cible. Évolution possible : push des images vers un registre et déploiement preprod/prod.
 
@@ -432,4 +453,56 @@ Le CD (déploiement) n'est pas mis en place faute d'environnement cible. Évolut
 
 ## 12. Frontend
 
-*À compléter : architecture (`pages / components / hooks / services / types`), persistance de l'état (URL + localStorage), debounce, virtualisation du tableau, lecture incrémentale du flux NDJSON, tests Vitest et Testing Library, Dockerfile multi-stage (build puis nginx avec proxy vers le backend).*
+React 19, TypeScript, Vite. Données serveur : TanStack Query. Tableau : TanStack Table v8 (colonnes, en-têtes, état de tri) et TanStack Virtual (virtualisation). Tests : Vitest et React Testing Library.
+
+### Organisation
+
+    frontend/src/
+      pages/        Écrans (accueil, page d'un import)
+      components/   Composants d'interface (tableau, fenêtres, filtres, pagination)
+      hooks/        Accès aux données et état (requêtes, mutations, état du tableau, sélection)
+      services/     Appels HTTP typés, lecture du flux NDJSON, magasin de lignes
+      utils/        Logique pure testée : état du tableau, filtres, validation, sélection
+      types/        Types du contrat d'API
+
+Aucune logique métier dans les composants : la traduction état → requête, la validation des saisies, la sélection et les règles de lot sont des fonctions pures testées isolément.
+
+### Choix techniques
+
+- **Tout passe par le serveur.** Chaque tri, filtre ou changement de page est une requête ; le frontend ne charge jamais l'import entier. TanStack Query annule les requêtes devenues obsolètes (`AbortSignal`) et conserve la page précédente à l'écran pendant le chargement de la suivante.
+- **Filtres : brouillon local, debounce de 300 ms.** Une frappe ne déclenche pas de requête ; la valeur est validée côté client (nombre, bornes) pour éviter une erreur 422 inutile. Frappe rapide dans un champ : une seule requête, visible dans l'onglet Réseau.
+- **État du tableau dans l'URL**, source de vérité (partageable, survit au rechargement), **et dans le `localStorage` par import** pour le retour dans l'import. La sauvegarde est liée à la structure des colonnes : après un remplacement par un fichier différent, l'ancien état est ignoré. Les URL modifiées à la main sont tolérées (valeurs invalides ignorées).
+- **Virtualisation.** Seules les lignes visibles sont dans le DOM. Le tableau est construit avec une hauteur de ligne fixe, donc la hauteur de défilement est exacte. TanStack Table ne construit pas de lignes : un modèle de lignes pour 1 M d'éléments annulerait le bénéfice.
+- **Pages de plus de 10 000 lignes en flux.** Au-delà, le frontend lit le flux NDJSON du backend ligne par ligne. Les lignes sont stockées hors de React (`useSyncExternalStore`), la progression est publiée au plus toutes les 150 ms, la taille de défilement est connue dès la première ligne, le chargement est interruptible, et un flux n'est considéré complet que s'il se termine par son marqueur `done`. La mémoire est libérée en quittant ce mode.
+- **Sélection multiple.** Deux formes, identiques à l'API : lignes cochées, ou « tout sélectionner » sur le résultat filtré avec les lignes décochées. Un million de lignes sélectionné n'envoie jamais un million d'identifiants. La sélection est vidée quand les filtres changent.
+- **Validation d'abord côté client, vérité côté serveur.** Les nombres sont envoyés sous forme de texte et convertis par le backend avec les règles de l'import : aucune perte de précision sur les grands entiers, virgule décimale acceptée.
+
+### Mesures
+
+| Mesure                                                                                 | Résultat                       |
+| -------------------------------------------------------------------------------------- | ------------------------------ |
+| Analyse de `big.csv` (1 M de lignes) depuis l'interface                                | ≈ 6 s                          |
+| Import de `big.csv` après correction des types                                         | ≈ 15 s                         |
+| Page de 10 000 lignes avant virtualisation                                             | ≈ 5 s                          |
+| Page de 10 000 lignes avec virtualisation                                              | ≈ 1s                           |
+| Flux de 1 000 000 de lignes                                                            | ≈ 10 s                         |
+| Mémoire du navigateur : repos / pic pendant 1 M de lignes / retour sur une petite page | ≈ 230 Mo / ≈ 480 Mo / ≈ 140 Mo |
+| Suppression par filtre (124 999 lignes)                                                | ≈ 3s                           |
+
+### Stratégie de tests
+
+- **Unitaires** : logique pure (état du tableau et encodage URL, validation des filtres et des saisies, sélection, plan d'édition par lot), service HTTP, lecture du flux (lignes coupées entre deux paquets, caractères multi-octets, flux tronqué, annulation), magasin de lignes (publication par rafales, interruption, relance).
+- **Composants et parcours** : React Testing Library avec `fetch` simulé (la frontière réseau, jamais les services) : import en deux temps, tri en trois états, filtres avec debounce, pagination, restauration depuis l'URL et le `localStorage`, édition avec confirmation, sélection et opérations par lot, pages en flux.
+- **Non couvert automatiquement** : le geste de glisser-déposer de la liste des imports (jsdom n'a pas de mise en page) ; sa logique pure l'est, et le geste a été vérifié à la main.
+- Seuil de couverture : 70 % minimum (configuré dans `vite.config.ts`, appliqué en CI). Couverture actuelle : +92% sur tous les fichiers.
+
+### Limitations connues (frontend)
+
+- Un million de lignes tient en mémoire du navigateur (≈ 480 Mo mesurés) : c'est le cas d'exercice, pas un usage réaliste.
+- Après une édition ou une opération par lot, une page en flux se recharge en entier (≈ 10 s pour 1 M de lignes), et peut être relancée deux fois.
+- La sélection par cases d'une page en flux est désactivée (« Tout sélectionner » reste disponible) ; la sélection par identifiants est plafonnée à 100 000 lignes par le backend.
+- Un seul filtre par colonne dans l'interface (l'API en accepte plusieurs).
+- Les entiers au-delà de 2⁵³ sont affichés arrondis (nombres JSON) ; la valeur stockée et envoyée reste exacte.
+- Le type d'une colonne ne peut pas être changé après l'import : il faut refaire un remplacement avec le même fichier.
+- Pas de barre de progression pendant l'envoi d'un fichier (`fetch` n'expose pas la progression d'envoi) ; le fichier est envoyé deux fois en mode remplacement (détection puis import).
+- Pas d'authentification ; dernier enregistrement gagnant en cas de modifications concurrentes.
