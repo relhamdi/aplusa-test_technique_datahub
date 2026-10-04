@@ -27,3 +27,16 @@ it("posts the query as JSON to the import rows endpoint", async () => {
     page_size: 50,
   });
 });
+
+it("patches only the given fields of one row", async () => {
+  let body: unknown;
+  stubApi({
+    "PATCH /api/imports/7/rows/r9": (init) => {
+      body = JSON.parse(init.body as string);
+      return json({ id: "r9", values: { c1: "x" } });
+    },
+  });
+  const row = await rowsService.update("7", "r9", { c1: "x" });
+  expect(row.id).toBe("r9");
+  expect(body).toEqual({ values: { c1: "x" } });
+});

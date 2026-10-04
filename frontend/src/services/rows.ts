@@ -1,4 +1,4 @@
-import type { PageOut, RowQuery } from "../types/api";
+import type { PageOut, RowOut, RowQuery } from "../types/api";
 import { request } from "./http";
 
 // POST rather than GET: filters are a nested structure, cleaner as a JSON body.
@@ -8,5 +8,12 @@ export const rowsService = {
       method: "POST",
       json: query,
       signal,
+    }),
+
+  // Only the edited fields are sent, keyed by technical column key.
+  update: (importId: string, rowId: string, values: Record<string, unknown>) =>
+    request<RowOut>(`/imports/${importId}/rows/${rowId}`, {
+      method: "PATCH",
+      json: { values },
     }),
 };
