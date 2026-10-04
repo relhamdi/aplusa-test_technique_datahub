@@ -94,4 +94,13 @@ describe("useTableState", () => {
     expect(result.current.state).toEqual(DEFAULT_STATE);
     expect(loadSavedState("imp1", SIGNATURE)).toEqual(DEFAULT_STATE);
   });
+
+  it("does not persist anything while the import has no columns", () => {
+    const none: Column[] = [];
+    const { result } = renderHook(() => useTableState("imp1", none), {
+      wrapper: wrap(),
+    });
+    act(() => result.current.dispatch({ type: "page", page: 2 }));
+    expect(localStorage.length).toBe(0);
+  });
 });

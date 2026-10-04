@@ -45,9 +45,10 @@ export function useTableState(importId: string, columns: Column[]) {
     return sanitizeState(base, columns);
   }, [query, seed, columns]);
 
+  const hasColumns = columns.length > 0;
   useEffect(() => {
-    saveState(importId, signature, state);
-  }, [importId, signature, state]);
+    if (hasColumns) saveState(importId, signature, state);
+  }, [importId, signature, state, hasColumns]);
 
   const dispatch = useCallback(
     (change: TableChange) => {
