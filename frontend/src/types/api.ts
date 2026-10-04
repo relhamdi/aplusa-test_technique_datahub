@@ -1,6 +1,6 @@
 export type ColumnType = "boolean" | "integer" | "float" | "string";
 
-// Above this size the backend only answers through the streaming endpoint.
+// Above this size a page is read through the streaming endpoint instead.
 export const MAX_PAGINATED_SIZE = 10_000;
 
 export interface Column {
@@ -109,5 +109,13 @@ export interface PageOut {
   page: number;
   page_size: number;
   // Column keys whose index is still being built (query ran anyway).
+  indexing: string[];
+}
+
+export interface StreamMeta {
+  total: number; // rows matching the filters
+  returned: number; // rows this page really contains (size capped to what is left)
+  page: number;
+  page_size: number;
   indexing: string[];
 }
