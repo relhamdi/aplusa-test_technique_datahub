@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -270,6 +270,19 @@ describe("DataTab: import dialog", () => {
   });
 });
 
+const STREAM = "POST /api/imports/1/rows/stream";
+const ndjson = (...lines: object[]) =>
+  new Response(lines.map((l) => JSON.stringify(l)).join("\n") + "\n", {
+    headers: { "content-type": "application/x-ndjson" },
+  });
+const META = {
+  total: 2,
+  returned: 2,
+  page: 1,
+  page_size: 1_000_000,
+  indexing: [],
+};
+
 describe("DataTab: table", () => {
   it("builds the columns from the headers and formats the cells", async () => {
     stubRows();
@@ -278,8 +291,8 @@ describe("DataTab: table", () => {
     for (const name of ["id", "label", "flag"]) {
       expect(screen.getByRole("button", { name })).toBeInTheDocument();
     }
-    // Body cells only: the boolean filter dropdown also has "Oui" / "Non" options.
-    const cells = screen.getAllByRole("cell").map((cell) => cell.textContent);
+    const body = within(screen.getByRole("rowgroup", { name: "Lignes" }));
+    const cells = body.getAllByRole("cell").map((cell) => cell.textContent);
     expect(cells).toContain("Oui");
     expect(cells).toContain("Non");
     expect(cells.filter((text) => text === "(vide)")).toHaveLength(1); // the null cell
@@ -435,22 +448,6 @@ describe("DataTab: table", () => {
     );
   });
 
-  it("does not call the API for a page size that needs the streaming mode", async () => {
-    const user = userEvent.setup();
-    const { calls, last } = stubRows();
-    renderWithProviders(<DataTab item={populated} />, {
-      route: "/?size=1000000",
-    });
-
-    expect(await screen.findByRole("alert")).toHaveTextContent("mode flux");
-    expect(calls).not.toContain(ROWS);
-
-    await user.click(
-      screen.getByRole("button", { name: "Revenir à 20 lignes par page" }),
-    );
-    await waitFor(() => expect(last().page_size).toBe(20));
-  });
-
   it("replace resets the table state, append keeps it", async () => {
     const user = userEvent.setup();
     const route = "/?page=3&sort=c0:desc";
@@ -495,5 +492,132 @@ describe("DataTab: table", () => {
     await waitFor(() =>
       expect(replace.last()).toMatchObject({ page: 1, sort: null }),
     );
+  });
+
+  it("renders only the visible rows of a large page", async () => {
+    const rows = Array.from({ length: 500 }, (_, i) => ({
+      id: `r${i}`,
+      values: { c0: i, c1: `row-${i}`, c2: true },
+    }));
+    stubApi({
+      [ROWS]: () =>
+        json({ rows, total: 500, page: 1, page_size: 1000, indexing: [] }),
+    });
+    renderWithProviders(<DataTab item={populated} />, { route: "/?size=1000" });
+
+    expect(await screen.findByText("row-0")).toBeInTheDocument();
+    expect(screen.queryByText("row-400")).not.toBeInTheDocument();
+    const rendered = within(
+      screen.getByRole("rowgroup", { name: "Lignes" }),
+    ).getAllByRole("row");
+    expect(rendered.length).toBeLessThan(60); // 500 rows in the data, a few dozen in the DOM
+  });
+
+  it("streams a page larger than 10 000 rows instead of using the paginated endpoint", async () => {
+    let body: Body | undefined;
+    const { calls } = stubApi({
+      [STREAM]: (init) => {
+        body = JSON.parse(init.body as string) as Body;
+        return ndjson({ meta: META }, ...sampleRows, { done: 2 });
+      },
+    });
+    renderWithProviders(<DataTab item={populated} />, {
+      route: "/?size=1000000",
+    });
+
+    expect(await screen.findByText("alpha")).toBeInTheDocument();
+    expect(calls).toEqual([STREAM]); // the paginated endpoint is never called
+    expect(body).toMatchObject({ page: 1, page_size: 1_000_000 });
+    expect(await screen.findByText("1–2 sur 2")).toBeInTheDocument();
+  });
+
+  it("shows a streaming failure and keeps the rows received before it", async () => {
+    stubApi({
+      [STREAM]: () =>
+        ndjson({ meta: META }, sampleRows[0], { error: "stream interrupted" }),
+    });
+    renderWithProviders(<DataTab item={populated} />, {
+      route: "/?size=1000000",
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "interrompu par le serveur",
+    );
+    expect(screen.getByText("alpha")).toBeInTheDocument();
+  });
+
+  it("flags a stream that ends without its done marker", async () => {
+    stubApi({ [STREAM]: () => ndjson({ meta: META }, sampleRows[0]) });
+    renderWithProviders(<DataTab item={populated} />, {
+      route: "/?size=1000000",
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent("incomplète");
+  });
+
+  it("shows validation errors of the stream endpoint as real errors", async () => {
+    stubApi({ [STREAM]: () => json({ detail: "Unknown column 'zz'" }, 422) });
+    renderWithProviders(<DataTab item={populated} />, {
+      route: "/?size=1000000",
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Unknown column 'zz'",
+    );
+  });
+
+  it("lets the user stop a long stream and keeps what was received", async () => {
+    const user = userEvent.setup();
+    const encoder = new TextEncoder();
+    stubApi({
+      // 5 rows announced, 1 sent, and the body never closes: a stream in progress.
+      [STREAM]: () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              const meta = { ...META, total: 5, returned: 5 };
+              controller.enqueue(
+                encoder.encode(
+                  JSON.stringify({ meta }) +
+                    "\n" +
+                    JSON.stringify(sampleRows[0]) +
+                    "\n",
+                ),
+              );
+            },
+          }),
+        ),
+    });
+    renderWithProviders(<DataTab item={populated} />, {
+      route: "/?size=1000000",
+    });
+
+    expect(await screen.findByText("alpha")).toBeInTheDocument();
+    expect(screen.getByText(/1 \/ 5 lignes/)).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Arrêter le chargement" }),
+    );
+    expect(
+      await screen.findByText(/Chargement interrompu : 1 lignes reçues sur 5/),
+    ).toBeInTheDocument();
+    expect(screen.getByText("alpha")).toBeInTheDocument();
+  });
+
+  it("restarts the stream when the sort changes", async () => {
+    const user = userEvent.setup();
+    const bodies: Body[] = [];
+    stubApi({
+      [STREAM]: (init) => {
+        bodies.push(JSON.parse(init.body as string) as Body);
+        return ndjson({ meta: META }, ...sampleRows, { done: 2 });
+      },
+    });
+    renderWithProviders(<DataTab item={populated} />, {
+      route: "/?size=1000000",
+    });
+    await screen.findByText("alpha");
+
+    await user.click(screen.getByRole("button", { name: "id" }));
+    await waitFor(() => expect(bodies).toHaveLength(2));
+    expect(bodies[1].sort).toEqual({ column: "c0", direction: "asc" });
   });
 });

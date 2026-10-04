@@ -46,6 +46,7 @@ export function DataTab({ item }: { item: ImportSummary }) {
             state={state}
             dispatch={dispatch}
             filterResetKey={resetCount}
+            dataVersion={item.updated_at}
           />
         </>
       ) : (

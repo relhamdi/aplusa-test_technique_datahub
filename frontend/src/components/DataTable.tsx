@@ -5,24 +5,71 @@ import {
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table";
-import { useCallback, useEffect, useMemo, useState } from "react";
-
-import { useRows } from "../hooks/useRows";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
-  MAX_PAGINATED_SIZE,
-  type Column,
-  type FilterCondition,
-  type RowOut,
-} from "../types/api";
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+
+import { useRowSource } from "../hooks/useRowSource";
+import type { Column, FilterCondition, RowOut } from "../types/api";
 import { formatCell } from "../utils/formatCell";
 import {
   nextSort,
   pageCount,
+  toRowQuery,
   type TableChange,
   type TableState,
 } from "../utils/tableState";
 import { FilterCell } from "./FilterCell";
 import { Pagination } from "./Pagination";
+
+// Fixed row height: no per-row measurement, so the scroll height is exact.
+const ROW_HEIGHT = 28;
+const MIN_COLUMN_WIDTH = 160;
+// Also covers the sticky header, which sits above the list inside the scroll area.
+const OVERSCAN = 10;
+
+// Stable reference: a new [] on every render makes TanStack Table re-render in a loop.
+const NO_ROWS: RowOut[] = [];
+
+const ARIA_SORT = { asc: "ascending", desc: "descending" } as const;
+const fr = (n: number) => n.toLocaleString("fr-FR");
+
+interface GridCellProps {
+  value: unknown;
+  type: Column["type"];
+  loaded: boolean; // false: the streamed row has not arrived yet
+}
+
+function GridCell({ value, type, loaded }: GridCellProps) {
+  const className =
+    type === "integer" || type === "float" ? "grid-cell num" : "grid-cell";
+  if (!loaded) {
+    return (
+      <div role="cell" className={className}>
+        <span className="empty">…</span>
+      </div>
+    );
+  }
+  if (value === null || value === undefined) {
+    return (
+      <div role="cell" className={className}>
+        <span className="empty">(vide)</span>
+      </div>
+    );
+  }
+  const text = formatCell(value, type);
+  return (
+    <div role="cell" className={className} title={text}>
+      {text}
+    </div>
+  );
+}
 
 interface DataTableProps {
   importId: string;
@@ -31,18 +78,9 @@ interface DataTableProps {
   dispatch: (change: TableChange) => void;
   // Bumped by the parent after a replace, to empty the filter inputs.
   filterResetKey: number;
+  // Changes when the data changes behind our back (import): restarts a streamed page.
+  dataVersion: string;
 }
-
-// Stable reference: a new [] on every render makes TanStack Table re-render in a loop.
-const NO_ROWS: RowOut[] = [];
-
-function CellValue({ value, type }: { value: unknown; type: Column["type"] }) {
-  if (value === null || value === undefined)
-    return <span className="empty">(vide)</span>;
-  return <>{formatCell(value, type)}</>;
-}
-
-const ARIA_SORT = { asc: "ascending", desc: "descending" } as const;
 
 export function DataTable({
   importId,
@@ -50,32 +88,18 @@ export function DataTable({
   state,
   dispatch,
   filterResetKey,
+  dataVersion,
 }: DataTableProps) {
-  const { data, error, isPending, isFetching, isPlaceholderData } = useRows(
-    importId,
-    state,
-  );
+  const source = useRowSource(importId, state, dataVersion);
   const [clearCount, setClearCount] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const typeByKey = useMemo(
-    () => new Map(columns.map((c) => [c.key, c.type])),
-    [columns],
-  );
-
-  // Columns are built from the file headers: nothing is hard-coded.
+  // TanStack Table keeps the column model, the headers and the sort state.
+  // It gets no rows; building a row model for 1M rows would defeat the virtualization.
   const tableColumns = useMemo<ColumnDef<RowOut>[]>(
-    () =>
-      columns.map((column) => ({
-        id: column.key,
-        header: column.name,
-        accessorFn: (row) => row.values[column.key],
-        cell: (context) => (
-          <CellValue value={context.getValue()} type={column.type} />
-        ),
-      })),
+    () => columns.map((column) => ({ id: column.key, header: column.name })),
     [columns],
   );
-
   const sorting = useMemo<SortingState>(
     () =>
       state.sort
@@ -88,26 +112,37 @@ export function DataTable({
   // nothing derived from `table` is passed to a memoized component here, so skipping is harmless.
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
-    data: data?.rows ?? NO_ROWS,
+    data: NO_ROWS,
     columns: tableColumns,
     getCoreRowModel: getCoreRowModel(),
-    getRowId: (row) => row.id,
-    // Sorting, filtering and pagination are done by the backend: the table only displays.
+    // Sorting, filtering and pagination are done by the backend.
     manualSorting: true,
     manualFiltering: true,
     manualPagination: true,
     state: { sorting },
   });
 
-  const total = data?.total ?? 0;
-  const pages = pageCount(total, state.pageSize);
+  // Same remark: the virtualizer hands back functions that change identity.
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const virtualizer = useVirtualizer({
+    count: source.count,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: OVERSCAN,
+  });
 
+  // A new page, sort or filter starts at the top of the grid.
+  const queryKey = JSON.stringify(toRowQuery(state));
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [queryKey]);
+
+  const pages = pageCount(source.total, state.pageSize);
   // The last page can disappear (rows deleted elsewhere): fall back to the new last page.
   useEffect(() => {
-    if (data && !isPlaceholderData && state.page > pages) {
+    if (source.ready && state.page > pages)
       dispatch({ type: "page", page: pages });
-    }
-  }, [data, isPlaceholderData, state.page, pages, dispatch]);
+  }, [source.ready, state.page, pages, dispatch]);
 
   const handleFilterChange = useCallback(
     (columnKey: string, filter: FilterCondition | null) => {
@@ -121,21 +156,12 @@ export function DataTable({
     [state.filters, dispatch],
   );
 
-  if (state.pageSize > MAX_PAGINATED_SIZE) {
-    return (
-      <div role="alert" className="error">
-        <p>Cette taille de page nécessite le mode flux (WIP).</p>
-        <button
-          type="button"
-          onClick={() => dispatch({ type: "pageSize", pageSize: 20 })}
-        >
-          Revenir à 20 lignes par page
-        </button>
-      </div>
-    );
-  }
-
+  const gridStyle: CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: `repeat(${columns.length}, minmax(${MIN_COLUMN_WIDTH}px, 1fr))`,
+  };
   const isFiltered = state.filters.length > 0 || state.sort !== null;
+  const stream = source.stream;
 
   return (
     <div>
@@ -153,32 +179,61 @@ export function DataTable({
         </div>
       )}
 
-      {error && (
+      {source.error && (
         <p role="alert" className="error">
-          Erreur : {error.message}
+          Erreur : {source.error}
         </p>
       )}
-      {data?.indexing.length ? (
+      {source.indexing.length > 0 && (
         <p className="hint">
           Index en cours de création (les prochaines requêtes seront plus
           rapides).
         </p>
-      ) : null}
+      )}
 
-      <div className="data-scroll">
-        <table
-          className="data-table"
-          aria-busy={isFetching}
-          data-refreshing={isPlaceholderData}
+      {stream?.status === "loading" && source.count > 0 && (
+        <div className="stream-status" role="status">
+          <span>{`Chargement en flux : ${fr(stream.loaded)} / ${fr(source.count)} lignes`}</span>
+          <progress value={stream.loaded} max={source.count} />
+          <button type="button" onClick={stream.stop}>
+            Arrêter le chargement
+          </button>
+        </div>
+      )}
+      {stream?.status === "stopped" && (
+        <p role="status" className="hint">
+          {`Chargement interrompu : ${fr(stream.loaded)} lignes reçues sur ${fr(source.count)}.`}
+        </p>
+      )}
+
+      <div
+        ref={scrollRef}
+        className="data-scroll"
+        role="table"
+        aria-label="Données"
+        aria-rowcount={source.count + 2}
+        aria-busy={source.isPending || source.isRefreshing}
+        data-refreshing={source.isRefreshing}
+      >
+        <div
+          className="grid-inner"
+          style={{ minWidth: columns.length * MIN_COLUMN_WIDTH }}
         >
-          <thead>
-            {table.getHeaderGroups().map((group) => (
-              <tr key={group.id}>
-                {group.headers.map((header) => {
+          <div className="grid-header" role="rowgroup">
+            <div
+              role="row"
+              aria-rowindex={1}
+              className="grid-row"
+              style={gridStyle}
+            >
+              {table.getHeaderGroups().flatMap((group) =>
+                group.headers.map((header) => {
                   const sorted = header.column.getIsSorted();
                   return (
-                    <th
+                    <div
                       key={header.id}
+                      role="columnheader"
+                      className="grid-head-cell"
                       aria-sort={sorted ? ARIA_SORT[sorted] : "none"}
                     >
                       <button
@@ -203,50 +258,68 @@ export function DataTable({
                               : "↕"}
                         </span>
                       </button>
-                    </th>
+                    </div>
                   );
-                })}
-              </tr>
-            ))}
+                }),
+              )}
+            </div>
             {/* The key remounts the inputs when filters are cleared from outside. */}
-            <tr
-              className="filter-row"
+            <div
+              role="row"
+              aria-rowindex={2}
+              className="grid-row filter-row"
+              style={gridStyle}
               key={`filters-${filterResetKey}-${clearCount}`}
             >
               {columns.map((column) => (
-                <th key={column.key}>
+                <div key={column.key} role="cell" className="grid-head-cell">
                   <FilterCell
                     column={column}
                     current={state.filters.find((f) => f.column === column.key)}
                     onChange={handleFilterChange}
                   />
-                </th>
+                </div>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {table.getRowModel().rows.map((row) => (
-              <tr key={row.id}>
-                {row.getVisibleCells().map((cell) => {
-                  const type = typeByKey.get(cell.column.id);
-                  const numeric = type === "integer" || type === "float";
-                  return (
-                    <td key={cell.id} className={numeric ? "num" : undefined}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext(),
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </div>
+          </div>
+
+          <div
+            role="rowgroup"
+            aria-label="Lignes"
+            className="grid-body"
+            style={{ height: virtualizer.getTotalSize() }}
+          >
+            {virtualizer.getVirtualItems().map((item) => {
+              const row = source.getRow(item.index);
+              return (
+                <div
+                  key={item.key}
+                  role="row"
+                  aria-rowindex={item.index + 3}
+                  className="grid-row data-row"
+                  style={{
+                    ...gridStyle,
+                    height: ROW_HEIGHT,
+                    transform: `translateY(${item.start}px)`,
+                  }}
+                >
+                  {columns.map((column) => (
+                    <GridCell
+                      key={column.key}
+                      value={row?.values[column.key]}
+                      type={column.type}
+                      loaded={row !== undefined}
+                    />
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
-      {isPending && <p>Chargement…</p>}
-      {data && total === 0 && (
+      {source.isPending && <p>Chargement…</p>}
+      {source.ready && source.total === 0 && (
         <p>
           {state.filters.length > 0
             ? "Aucune ligne ne correspond aux filtres."
@@ -257,8 +330,8 @@ export function DataTable({
       <Pagination
         page={state.page}
         pageSize={state.pageSize}
-        total={total}
-        disabled={isPending}
+        total={source.total}
+        disabled={source.isPending}
         onPage={(page) => dispatch({ type: "page", page })}
         onPageSize={(pageSize) => dispatch({ type: "pageSize", pageSize })}
       />
