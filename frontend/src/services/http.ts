@@ -34,6 +34,15 @@ function messageFrom(payload: unknown, fallback: string): string {
   return fallback;
 }
 
+// Builds the ApiError of a non-2xx response; shared by JSON calls and streams.
+export async function toApiError(response: Response): Promise<ApiError> {
+  const payload: unknown = await response.json().catch(() => null);
+  return new ApiError(
+    response.status,
+    messageFrom(payload, response.statusText || `HTTP ${response.status}`),
+  );
+}
+
 /** Single entry point for JSON calls. */
 export async function request<T>(
   path: string,
@@ -54,12 +63,6 @@ export async function request<T>(
   });
 
   if (response.status === 204) return undefined as T;
-  const payload: unknown = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new ApiError(
-      response.status,
-      messageFrom(payload, response.statusText || `HTTP ${response.status}`),
-    );
-  }
-  return payload as T;
+  if (!response.ok) throw await toApiError(response);
+  return (await response.json().catch(() => null)) as T;
 }
