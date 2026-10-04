@@ -196,3 +196,88 @@ fieldset.field label {
   padding: 0.35rem 0.5rem;
   border-bottom: 1px solid #e5e7eb;
 }
+
+.data-scroll {
+  overflow: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.35rem 0.6rem;
+  text-align: left;
+  border-bottom: 1px solid #f3f4f6;
+  white-space: nowrap;
+}
+
+.data-table thead th {
+  background: #f9fafb;
+  position: sticky;
+  top: 0;
+}
+
+.data-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table[data-refreshing='true'] {
+  opacity: 0.55;
+}
+
+.sort-button {
+  border: none;
+  background: transparent;
+  font-weight: 600;
+  padding: 0;
+  display: inline-flex;
+  gap: 0.35rem;
+}
+
+.sort-icon {
+  color: #9ca3af;
+}
+
+.filter-row th {
+  font-weight: normal;
+}
+
+.filter-cell {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 9rem;
+}
+
+.filter-cell input,
+.filter-cell select {
+  font: inherit;
+  padding: 0.2rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+}
+
+.filter-cell input[aria-invalid='true'] {
+  border-color: #b91c1c;
+  background: #fef2f2;
+}
+
+.empty {
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
