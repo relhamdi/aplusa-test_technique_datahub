@@ -19,8 +19,10 @@ const sample: ImportSummary = {
   updated_at: "",
 };
 
-afterEach(() => vi.unstubAllGlobals());
-
+afterEach(() => {
+  vi.unstubAllGlobals();
+  localStorage.clear();
+});
 describe("HomePage", () => {
   it("shows the empty state when there is no import", async () => {
     stubApi({ "GET /api/imports": () => json([]) });
@@ -134,7 +136,7 @@ describe("HomePage", () => {
     expect(body).toEqual({ name: "Ventes 2", description: "" });
   });
 
-  it("asks for confirmation before deleting", async () => {
+  it("asks for confirmation before deleting, and forgets the saved table state", async () => {
     const user = userEvent.setup();
     let items = [sample];
     const { calls } = stubApi({
@@ -144,6 +146,7 @@ describe("HomePage", () => {
         return new Response(null, { status: 204 });
       },
     });
+    localStorage.setItem("datahub:table:1", "saved-state"); // state saved for import "1"
 
     renderWithProviders(<HomePage />);
     await user.click(
@@ -156,6 +159,7 @@ describe("HomePage", () => {
     );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(calls).not.toContain("DELETE /api/imports/1"); // cancel deletes nothing
+    expect(localStorage.getItem("datahub:table:1")).toBe("saved-state"); // nor the saved state
 
     await user.click(screen.getByRole("button", { name: "Supprimer Ventes" }));
     await user.click(
@@ -166,6 +170,7 @@ describe("HomePage", () => {
     expect(
       await screen.findByText("Aucun import pour le moment."),
     ).toBeInTheDocument();
+    expect(localStorage.getItem("datahub:table:1")).toBeNull();
   });
 
   it("closes a dialog with Escape", async () => {
