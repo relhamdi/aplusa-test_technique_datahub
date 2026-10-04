@@ -27,3 +27,20 @@ it("patches only the fields it is given", async () => {
   expect(init.method).toBe("PATCH");
   expect(init.body).toBe('{"name":"New"}');
 });
+
+it("creates, fetches, lists and deletes through the matching routes", async () => {
+  const fetchMock = stub();
+  await importsService.create({ name: "A" });
+  await importsService.get("7");
+  await importsService.list();
+  await importsService.remove("7");
+  const calls = fetchMock.mock.calls.map(
+    ([url, init]) => `${(init as RequestInit)?.method ?? "GET"} ${url}`,
+  );
+  expect(calls).toEqual([
+    "POST /api/imports",
+    "GET /api/imports/7",
+    "GET /api/imports",
+    "DELETE /api/imports/7",
+  ]);
+});
