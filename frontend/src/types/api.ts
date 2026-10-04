@@ -119,3 +119,17 @@ export interface StreamMeta {
   page_size: number;
   indexing: string[];
 }
+
+export type FieldAction =
+  | { action: "keep" }
+  | { action: "set"; value: unknown }
+  | { action: "clear" };
+
+export type ApiSelection =
+  | { mode: "ids"; ids: string[] }
+  | { mode: "filter"; filters: FilterCondition[]; excluded_ids: string[] };
+
+export interface BatchResult {
+  matched: number; // rows selected
+  affected: number; // rows really modified or deleted
+}
