@@ -6,6 +6,8 @@ import {
   decodeState,
   hasTableParams,
   mergeTableParams,
+  nextSort,
+  pageCount,
   reduceState,
   sanitizeState,
   toRowQuery,
@@ -147,4 +149,32 @@ it("maps the state to the API query", () => {
     page: 3,
     page_size: 50,
   });
+});
+
+it("clear drops filters and sort but keeps the page size", () => {
+  const cleared = reduceState({ ...full, pageSize: 100 }, { type: "clear" });
+  expect(cleared).toEqual({ page: 1, pageSize: 100, sort: null, filters: [] });
+});
+
+describe("nextSort", () => {
+  it("cycles none -> asc -> desc -> none on the same column", () => {
+    const asc = nextSort(null, "c0");
+    expect(asc).toEqual({ column: "c0", direction: "asc" });
+    const desc = nextSort(asc, "c0");
+    expect(desc).toEqual({ column: "c0", direction: "desc" });
+    expect(nextSort(desc, "c0")).toBeNull();
+  });
+
+  it("starts ascending when another column is clicked", () => {
+    expect(nextSort({ column: "c0", direction: "desc" }, "c1")).toEqual({
+      column: "c1",
+      direction: "asc",
+    });
+  });
+});
+
+it("computes the page count, never below 1", () => {
+  expect(pageCount(0, 20)).toBe(1);
+  expect(pageCount(45, 20)).toBe(3);
+  expect(pageCount(40, 20)).toBe(2);
 });

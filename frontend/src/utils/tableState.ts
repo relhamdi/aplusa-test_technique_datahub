@@ -93,7 +93,7 @@ export function mergeTableParams(
 }
 
 /**
- * Drops what the current columns cannot honour (unknown column, operator invalid for the type), 
+ * Drops what the current columns cannot honour (unknown column, operator invalid for the type),
  * so a stale URL or saved state never produces a 422 from the API.
  */
 export function sanitizeState(
@@ -114,6 +114,7 @@ export type TableChange =
   | { type: "pageSize"; pageSize: PageSize }
   | { type: "sort"; sort: SortSpec | null }
   | { type: "filters"; filters: FilterCondition[] }
+  | { type: "clear" } // drops filters and sort but keeps the page size the user chose
   | { type: "reset" };
 
 /** Any change that alters the result set sends the user back to page 1. */
@@ -130,6 +131,8 @@ export function reduceState(
       return { ...state, sort: change.sort, page: 1 };
     case "filters":
       return { ...state, filters: change.filters, page: 1 };
+    case "clear":
+      return { ...state, sort: null, filters: [], page: 1 };
     case "reset":
       return DEFAULT_STATE;
   }
@@ -142,4 +145,17 @@ export function toRowQuery(state: TableState): RowQuery {
     page: state.page,
     page_size: state.pageSize,
   };
+}
+
+// Header click cycle: no sort -> ascending -> descending -> no sort.
+export function nextSort(
+  current: SortSpec | null,
+  column: string,
+): SortSpec | null {
+  if (current?.column !== column) return { column, direction: "asc" };
+  return current.direction === "asc" ? { column, direction: "desc" } : null;
+}
+
+export function pageCount(total: number, pageSize: number): number {
+  return Math.max(1, Math.ceil(total / pageSize));
 }
