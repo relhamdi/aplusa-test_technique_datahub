@@ -46,7 +46,7 @@ export function ImportPage() {
           </div>
           <div role="tabpanel">
             {tab === "data" ? (
-              <DataTab item={data} />
+              <DataTab key={data.id} item={data} />
             ) : (
               <p>Statistiques : TODO.</p>
             )}
