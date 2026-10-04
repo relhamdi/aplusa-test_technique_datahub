@@ -29,9 +29,15 @@ const TITLES: Record<Step, string> = {
 interface ImportFileDialogProps {
   item: ImportSummary;
   onClose: () => void;
+  // Lets the parent react to a finished import (e.g. reset the table after a replace).
+  onImported?: (report: IngestionReport) => void;
 }
 
-export function ImportFileDialog({ item, onClose }: ImportFileDialogProps) {
+export function ImportFileDialog({
+  item,
+  onClose,
+  onImported,
+}: ImportFileDialogProps) {
   // "append" needs an existing schema: it is only offered once the import has columns.
   const hasData = item.columns.length > 0;
   const [step, setStep] = useState<Step>("file");
@@ -54,6 +60,7 @@ export function ImportFileDialog({ item, onClose }: ImportFileDialogProps) {
   function finish(result: IngestionReport) {
     setReport(result);
     setStep("report");
+    onImported?.(result);
   }
 
   function submitFile() {
