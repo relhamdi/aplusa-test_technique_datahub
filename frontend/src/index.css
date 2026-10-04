@@ -158,3 +158,41 @@ button.danger {
   border-bottom-color: #2563eb;
   font-weight: 600;
 }
+
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.75rem;
+}
+
+.hint {
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+fieldset.field {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+fieldset.field label {
+  display: block;
+  margin: 0.2rem 0;
+}
+
+.table-scroll {
+  max-height: 40vh;
+  overflow: auto;
+}
+
+.types-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.types-table th,
+.types-table td {
+  text-align: left;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
