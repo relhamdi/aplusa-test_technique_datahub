@@ -37,6 +37,9 @@ const OVERSCAN = 10;
 // Stable reference: a new [] on every render makes TanStack Table re-render in a loop.
 const NO_ROWS: RowOut[] = [];
 
+// Fixed width of the trailing "Actions" column.
+const ACTION_WIDTH = 90;
+
 const ARIA_SORT = { asc: "ascending", desc: "descending" } as const;
 const fr = (n: number) => n.toLocaleString("fr-FR");
 
@@ -80,6 +83,7 @@ interface DataTableProps {
   filterResetKey: number;
   // Changes when the data changes behind our back (import): restarts a streamed page.
   dataVersion: string;
+  onEditRow: (row: RowOut, rowNumber: number) => void;
 }
 
 export function DataTable({
@@ -89,6 +93,7 @@ export function DataTable({
   dispatch,
   filterResetKey,
   dataVersion,
+  onEditRow,
 }: DataTableProps) {
   const source = useRowSource(importId, state, dataVersion);
   const [clearCount, setClearCount] = useState(0);
@@ -158,7 +163,7 @@ export function DataTable({
 
   const gridStyle: CSSProperties = {
     display: "grid",
-    gridTemplateColumns: `repeat(${columns.length}, minmax(${MIN_COLUMN_WIDTH}px, 1fr))`,
+    gridTemplateColumns: `repeat(${columns.length}, minmax(${MIN_COLUMN_WIDTH}px, 1fr)) ${ACTION_WIDTH}px`,
   };
   const isFiltered = state.filters.length > 0 || state.sort !== null;
   const stream = source.stream;
@@ -217,7 +222,9 @@ export function DataTable({
       >
         <div
           className="grid-inner"
-          style={{ minWidth: columns.length * MIN_COLUMN_WIDTH }}
+          style={{
+            minWidth: columns.length * MIN_COLUMN_WIDTH + ACTION_WIDTH,
+          }}
         >
           <div className="grid-header" role="rowgroup">
             <div
@@ -262,6 +269,9 @@ export function DataTable({
                   );
                 }),
               )}
+              <div role="columnheader" className="grid-head-cell">
+                Actions
+              </div>
             </div>
             {/* The key remounts the inputs when filters are cleared from outside. */}
             <div
@@ -280,6 +290,7 @@ export function DataTable({
                   />
                 </div>
               ))}
+              <div role="cell" className="grid-head-cell" />
             </div>
           </div>
 
@@ -291,6 +302,9 @@ export function DataTable({
           >
             {virtualizer.getVirtualItems().map((item) => {
               const row = source.getRow(item.index);
+              // Position in the whole result set, not in the page.
+              const rowNumber =
+                (state.page - 1) * state.pageSize + item.index + 1;
               return (
                 <div
                   key={item.key}
@@ -311,6 +325,17 @@ export function DataTable({
                       loaded={row !== undefined}
                     />
                   ))}
+                  <div role="cell" className="grid-cell actions-cell">
+                    {row && (
+                      <button
+                        type="button"
+                        aria-label={`Éditer la ligne ${rowNumber}`}
+                        onClick={() => onEditRow(row, rowNumber)}
+                      >
+                        Éditer
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}

@@ -620,4 +620,85 @@ describe("DataTab: table", () => {
     await waitFor(() => expect(bodies).toHaveLength(2));
     expect(bodies[1].sort).toEqual({ column: "c0", direction: "asc" });
   });
+
+  it("edits a row after confirmation, then refetches with the same page, sort and filters", async () => {
+    const user = userEvent.setup();
+    let patch: unknown;
+    const { bodies, calls } = stubRows({
+      "PATCH /api/imports/1/rows/r1": (init) => {
+        patch = JSON.parse(init.body as string);
+        return json({ id: "r1", values: { c0: 1, c1: "beta", c2: true } });
+      },
+    });
+    renderWithProviders(<DataTab item={populated} />, {
+      route: "/?page=2&sort=c0:desc",
+    });
+
+    // Page 2 of size 20: the first displayed row is number 21.
+    await user.click(
+      await screen.findByRole("button", { name: "Éditer la ligne 21" }),
+    );
+    const dialog = within(screen.getByRole("dialog"));
+    await user.clear(dialog.getByLabelText("label"));
+    await user.type(dialog.getByLabelText("label"), "beta");
+    await user.click(dialog.getByRole("button", { name: "Enregistrer" }));
+    await user.click(dialog.getByRole("button", { name: "Confirmer" }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(patch).toEqual({ values: { c1: "beta" } });
+    await waitFor(() =>
+      expect(calls.filter((c) => c === ROWS)).toHaveLength(2),
+    ); // refreshed by the API
+    expect(bodies[1]).toEqual(bodies[0]); // same page, sort and filters
+  });
+
+  it("does not call the API when the edit is cancelled", async () => {
+    const user = userEvent.setup();
+    const { calls } = stubRows();
+    renderWithProviders(<DataTab item={populated} />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Éditer la ligne 1" }),
+    );
+    await user.type(
+      within(screen.getByRole("dialog")).getByLabelText("label"),
+      "x",
+    );
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Annuler",
+      }),
+    );
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(calls.filter((c) => c.startsWith("PATCH"))).toEqual([]);
+  });
+
+  it("reloads a streamed page after an edit", async () => {
+    const user = userEvent.setup();
+    let streams = 0;
+    stubApi({
+      [STREAM]: () => {
+        streams += 1;
+        return ndjson({ meta: META }, ...sampleRows, { done: 2 });
+      },
+      "PATCH /api/imports/1/rows/r1": () =>
+        json({ id: "r1", values: { c0: 1, c1: "beta", c2: true } }),
+    });
+    renderWithProviders(<DataTab item={populated} />, {
+      route: "/?size=1000000",
+    });
+
+    await user.click(
+      await screen.findByRole("button", { name: "Éditer la ligne 1" }),
+    );
+    const dialog = within(screen.getByRole("dialog"));
+    await user.type(dialog.getByLabelText("label"), "!");
+    await user.click(dialog.getByRole("button", { name: "Enregistrer" }));
+    await user.click(dialog.getByRole("button", { name: "Confirmer" }));
+
+    await waitFor(() => expect(streams).toBe(2)); // the stream restarted with fresh data
+  });
 });
