@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { RowOut, RowQuery, StreamMeta } from "../types/api";
-import { ApiError } from "./http";
 import { StreamError, streamRows } from "./rowStream";
 
 const encoder = new TextEncoder();
@@ -158,7 +157,6 @@ describe("streamRows", () => {
       status: 422,
       message: "Unknown column 'zz'",
     });
-    expect(ApiError).toBeDefined();
   });
 
   it("posts the query as JSON and forwards the abort signal", async () => {

@@ -26,9 +26,12 @@ export class RowStreamStore {
   private controller: AbortController | null = null;
   private run = 0;
   private lastPublish = 0;
+  private readonly stream: typeof streamRows;
 
   // The stream function is injected so tests can drive it step by step.
-  constructor(private readonly stream: typeof streamRows = streamRows) {}
+  constructor(stream: typeof streamRows = streamRows) {
+    this.stream = stream;
+  }
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
