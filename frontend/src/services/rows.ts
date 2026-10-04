@@ -1,4 +1,11 @@
-import type { PageOut, RowOut, RowQuery } from "../types/api";
+import type {
+  ApiSelection,
+  BatchResult,
+  FieldAction,
+  PageOut,
+  RowOut,
+  RowQuery,
+} from "../types/api";
 import { request } from "./http";
 
 // POST rather than GET: filters are a nested structure, cleaner as a JSON body.
@@ -15,5 +22,21 @@ export const rowsService = {
     request<RowOut>(`/imports/${importId}/rows/${rowId}`, {
       method: "PATCH",
       json: { values },
+    }),
+
+  batchUpdate: (
+    importId: string,
+    selection: ApiSelection,
+    fields: Record<string, FieldAction>,
+  ) =>
+    request<BatchResult>(`/imports/${importId}/rows/batch-update`, {
+      method: "POST",
+      json: { selection, fields },
+    }),
+
+  batchDelete: (importId: string, selection: ApiSelection) =>
+    request<BatchResult>(`/imports/${importId}/rows/batch-delete`, {
+      method: "POST",
+      json: { selection },
     }),
 };

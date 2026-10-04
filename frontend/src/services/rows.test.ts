@@ -40,3 +40,35 @@ it("patches only the given fields of one row", async () => {
   expect(row.id).toBe("r9");
   expect(body).toEqual({ values: { c1: "x" } });
 });
+
+it("posts the selection and the field actions to batch-update", async () => {
+  let body: unknown;
+  stubApi({
+    "POST /api/imports/7/rows/batch-update": (init) => {
+      body = JSON.parse(init.body as string);
+      return json({ matched: 3, affected: 2 });
+    },
+  });
+  const result = await rowsService.batchUpdate(
+    "7",
+    { mode: "filter", filters: [], excluded_ids: ["x"] },
+    { c1: { action: "set", value: "a" }, c2: { action: "clear" } },
+  );
+  expect(result).toEqual({ matched: 3, affected: 2 });
+  expect(body).toEqual({
+    selection: { mode: "filter", filters: [], excluded_ids: ["x"] },
+    fields: { c1: { action: "set", value: "a" }, c2: { action: "clear" } },
+  });
+});
+
+it("posts the selection to batch-delete", async () => {
+  let body: unknown;
+  stubApi({
+    "POST /api/imports/7/rows/batch-delete": (init) => {
+      body = JSON.parse(init.body as string);
+      return json({ matched: 1, affected: 1 });
+    },
+  });
+  await rowsService.batchDelete("7", { mode: "ids", ids: ["a"] });
+  expect(body).toEqual({ selection: { mode: "ids", ids: ["a"] } });
+});
