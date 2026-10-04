@@ -107,6 +107,7 @@ button.danger {
 .overlay {
   position: fixed;
   inset: 0;
+  z-index: 100;
   background: rgba(0, 0, 0, 0.4);
   display: grid;
   place-items: center;
