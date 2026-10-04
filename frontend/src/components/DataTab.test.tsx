@@ -701,4 +701,208 @@ describe("DataTab: table", () => {
 
     await waitFor(() => expect(streams).toBe(2)); // the stream restarted with fresh data
   });
+
+  it("deletes the ticked rows by id after confirmation, then refreshes", async () => {
+    const user = userEvent.setup();
+    let body: unknown;
+    const { calls } = stubRows({
+      "POST /api/imports/1/rows/batch-delete": (init) => {
+        body = JSON.parse(init.body as string);
+        return json({ matched: 1, affected: 1 });
+      },
+    });
+    renderWithProviders(<DataTab item={populated} />);
+
+    await user.click(
+      await screen.findByRole("checkbox", { name: "Sélectionner la ligne 1" }),
+    );
+    expect(screen.getByText("1 ligne(s) sélectionnée(s)")).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Supprimer la sélection" }),
+    );
+    const dialog = within(screen.getByRole("dialog"));
+    expect(
+      dialog.getByText(/Supprimer définitivement 1 ligne/),
+    ).toBeInTheDocument();
+    await user.click(dialog.getByRole("button", { name: "Supprimer" }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(body).toEqual({ selection: { mode: "ids", ids: ["r1"] } });
+    expect(
+      await screen.findByText("1 ligne(s) supprimée(s)."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Aucune ligne sélectionnée")).toBeInTheDocument(); // selection cleared
+    await waitFor(() =>
+      expect(calls.filter((c) => c === ROWS).length).toBeGreaterThanOrEqual(2),
+    );
+  });
+
+  it('"select all" sends the filters and the unticked rows, not 45 ids', async () => {
+    const user = userEvent.setup();
+    let body: unknown;
+    stubRows({
+      "POST /api/imports/1/rows/batch-delete": (init) => {
+        body = JSON.parse(init.body as string);
+        return json({ matched: 44, affected: 44 });
+      },
+    });
+    const filters = [{ column: "c0", op: "gt", value: "10" }];
+    renderWithProviders(<DataTab item={populated} />, {
+      route: `/?filters=${encodeURIComponent(JSON.stringify(filters))}`,
+    });
+
+    await user.click(
+      await screen.findByRole("button", { name: "Tout sélectionner (45)" }),
+    );
+    expect(screen.getByText("45 ligne(s) sélectionnée(s)")).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("checkbox", { name: "Sélectionner la ligne 2" }),
+    ); // row r2
+    expect(screen.getByText("44 ligne(s) sélectionnée(s)")).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Supprimer la sélection" }),
+    );
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Supprimer",
+      }),
+    );
+    await waitFor(() => expect(body).toBeDefined());
+    expect(body).toEqual({
+      selection: { mode: "filter", filters, excluded_ids: ["r2"] },
+    });
+  });
+
+  it("warns when the selection covers the whole import", async () => {
+    const user = userEvent.setup();
+    stubRows();
+    renderWithProviders(<DataTab item={populated} />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Tout sélectionner (45)" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Supprimer la sélection" }),
+    );
+    expect(
+      within(screen.getByRole("dialog")).getByText(
+        /toutes les lignes de l'import/,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("edits the selection field by field: keep, set or clear", async () => {
+    const user = userEvent.setup();
+    let body: unknown;
+    stubRows({
+      "POST /api/imports/1/rows/batch-update": (init) => {
+        body = JSON.parse(init.body as string);
+        return json({ matched: 2, affected: 1 });
+      },
+    });
+    renderWithProviders(<DataTab item={populated} />);
+
+    await user.click(
+      await screen.findByRole("checkbox", {
+        name: "Sélectionner les lignes de la page",
+      }),
+    );
+    expect(screen.getByText("2 ligne(s) sélectionnée(s)")).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Modifier la sélection" }),
+    );
+
+    const dialog = within(screen.getByRole("dialog"));
+    await user.selectOptions(dialog.getByLabelText("Action pour label"), "set");
+    await user.type(dialog.getByLabelText("Valeur pour label"), "zeta");
+    await user.selectOptions(
+      dialog.getByLabelText("Action pour flag"),
+      "clear",
+    );
+    await user.click(dialog.getByRole("button", { name: "Continuer" }));
+
+    expect(dialog.getByText("label → zeta")).toBeInTheDocument();
+    expect(dialog.getByText("flag → (vide)")).toBeInTheDocument();
+    await user.click(dialog.getByRole("button", { name: "Appliquer" }));
+
+    expect(
+      await screen.findByText("1 ligne(s) modifiée(s) sur 2 sélectionnée(s)."),
+    ).toBeInTheDocument();
+    expect(body).toEqual({
+      selection: { mode: "ids", ids: ["r1", "r2"] },
+      fields: { c1: { action: "set", value: "zeta" }, c2: { action: "clear" } }, // id is "keep": not sent
+    });
+  });
+
+  it('cannot continue while a "set" has no value', async () => {
+    const user = userEvent.setup();
+    stubRows();
+    renderWithProviders(<DataTab item={populated} />);
+
+    await user.click(
+      await screen.findByRole("checkbox", { name: "Sélectionner la ligne 1" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Modifier la sélection" }),
+    );
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.getByRole("button", { name: "Continuer" })).toBeDisabled(); // everything is "keep"
+
+    await user.selectOptions(dialog.getByLabelText("Action pour label"), "set");
+    expect(dialog.getByText(/choisissez « Vider »/)).toBeInTheDocument();
+    expect(dialog.getByRole("button", { name: "Continuer" })).toBeDisabled();
+  });
+
+  it("keeps the selection across pages", async () => {
+    const user = userEvent.setup();
+    stubRows();
+    renderWithProviders(<DataTab item={populated} />);
+
+    await user.click(
+      await screen.findByRole("checkbox", { name: "Sélectionner la ligne 1" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Page suivante" }));
+    expect(await screen.findByText("Page 2 sur 3")).toBeInTheDocument();
+    expect(screen.getByText("1 ligne(s) sélectionnée(s)")).toBeInTheDocument();
+  });
+
+  it("drops the selection when the filters change", async () => {
+    const user = userEvent.setup();
+    stubRows();
+    renderWithProviders(<DataTab item={populated} />);
+
+    await user.click(
+      await screen.findByRole("checkbox", { name: "Sélectionner la ligne 1" }),
+    );
+    expect(screen.getByText("1 ligne(s) sélectionnée(s)")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Valeur label"), "al");
+    await waitFor(() =>
+      expect(screen.getByText("Aucune ligne sélectionnée")).toBeInTheDocument(),
+    );
+  });
+
+  it('cannot select a streamed page row by row, but "select all" still works', async () => {
+    const user = userEvent.setup();
+    stubApi({
+      [STREAM]: () => ndjson({ meta: META }, ...sampleRows, { done: 2 }),
+    });
+    renderWithProviders(<DataTab item={populated} />, {
+      route: "/?size=1000000",
+    });
+
+    await screen.findByText("alpha");
+    expect(
+      screen.getByRole("checkbox", {
+        name: "Sélectionner les lignes de la page",
+      }),
+    ).toBeDisabled();
+    await user.click(
+      screen.getByRole("button", { name: "Tout sélectionner (2)" }),
+    );
+    expect(screen.getByText("2 ligne(s) sélectionnée(s)")).toBeInTheDocument();
+  });
 });

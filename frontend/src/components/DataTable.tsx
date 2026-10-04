@@ -16,8 +16,23 @@ import {
 } from "react";
 
 import { useRowSource } from "../hooks/useRowSource";
-import type { Column, FilterCondition, RowOut } from "../types/api";
+import {
+  MAX_PAGINATED_SIZE,
+  type Column,
+  type FilterCondition,
+  type RowOut,
+} from "../types/api";
 import { formatCell } from "../utils/formatCell";
+import {
+  EMPTY_SELECTION,
+  isSelected,
+  pageState,
+  selectAllMatching,
+  selectedCount,
+  togglePage,
+  toggleRow,
+  type Selection,
+} from "../utils/selection";
 import {
   nextSort,
   pageCount,
@@ -26,19 +41,19 @@ import {
   type TableState,
 } from "../utils/tableState";
 import { FilterCell } from "./FilterCell";
+import { IndeterminateCheckbox } from "./IndeterminateCheckbox";
 import { Pagination } from "./Pagination";
+import { SelectionBar } from "./SelectionBar";
 
 // Fixed row height: no per-row measurement, so the scroll height is exact.
 const ROW_HEIGHT = 28;
 const MIN_COLUMN_WIDTH = 160;
-// Also covers the sticky header, which sits above the list inside the scroll area.
+const CHECK_WIDTH = 40;
+const ACTION_WIDTH = 90;
 const OVERSCAN = 10;
 
 // Stable reference: a new [] on every render makes TanStack Table re-render in a loop.
 const NO_ROWS: RowOut[] = [];
-
-// Fixed width of the trailing "Actions" column.
-const ACTION_WIDTH = 90;
 
 const ARIA_SORT = { asc: "ascending", desc: "descending" } as const;
 const fr = (n: number) => n.toLocaleString("fr-FR");
@@ -81,9 +96,13 @@ interface DataTableProps {
   dispatch: (change: TableChange) => void;
   // Bumped by the parent after a replace, to empty the filter inputs.
   filterResetKey: number;
-  // Changes when the data changes behind our back (import): restarts a streamed page.
+  // Changes when the data changes behind our back (import, edit): restarts a streamed page.
   dataVersion: string;
+  selection: Selection;
+  onSelectionChange: (next: Selection) => void;
   onEditRow: (row: RowOut, rowNumber: number) => void;
+  onEditSelection: (count: number) => void;
+  onDeleteSelection: (count: number) => void;
 }
 
 export function DataTable({
@@ -93,11 +112,16 @@ export function DataTable({
   dispatch,
   filterResetKey,
   dataVersion,
+  selection,
+  onSelectionChange,
   onEditRow,
+  onEditSelection,
+  onDeleteSelection,
 }: DataTableProps) {
   const source = useRowSource(importId, state, dataVersion);
   const [clearCount, setClearCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const streaming = state.pageSize > MAX_PAGINATED_SIZE;
 
   // TanStack Table keeps the column model, the headers and the sort state.
   // It gets no rows; building a row model for 1M rows would defeat the virtualization.
@@ -143,11 +167,29 @@ export function DataTable({
   }, [queryKey]);
 
   const pages = pageCount(source.total, state.pageSize);
-  // The last page can disappear (rows deleted elsewhere): fall back to the new last page.
+  // The last page can disappear (rows deleted): fall back to the new last page.
   useEffect(() => {
     if (source.ready && state.page > pages)
       dispatch({ type: "page", page: pages });
   }, [source.ready, state.page, pages, dispatch]);
+
+  // Ids of the rows of the current page, for the header checkbox. 
+  // Not computed for streamed pages: walking up to 1M rows on every scroll render would freeze the grid
+  // (and the backend caps id lists at 100 000). "Select all" covers those pages.
+  const pageIds = useMemo(() => {
+    if (streaming) return [];
+    const ids: string[] = [];
+    for (let i = 0; i < source.count; i += 1) {
+      const row = source.getRow(i);
+      if (row) ids.push(row.id);
+    }
+    return ids;
+  }, [streaming, source.count, source.getRow]);
+  const headerState = useMemo(
+    () => pageState(selection, pageIds),
+    [selection, pageIds],
+  );
+  const count = selectedCount(selection, source.total);
 
   const handleFilterChange = useCallback(
     (columnKey: string, filter: FilterCondition | null) => {
@@ -163,7 +205,7 @@ export function DataTable({
 
   const gridStyle: CSSProperties = {
     display: "grid",
-    gridTemplateColumns: `repeat(${columns.length}, minmax(${MIN_COLUMN_WIDTH}px, 1fr)) ${ACTION_WIDTH}px`,
+    gridTemplateColumns: `${CHECK_WIDTH}px repeat(${columns.length}, minmax(${MIN_COLUMN_WIDTH}px, 1fr)) ${ACTION_WIDTH}px`,
   };
   const isFiltered = state.filters.length > 0 || state.sort !== null;
   const stream = source.stream;
@@ -176,7 +218,7 @@ export function DataTable({
             type="button"
             onClick={() => {
               dispatch({ type: "clear" });
-              setClearCount((count) => count + 1);
+              setClearCount((value) => value + 1);
             }}
           >
             Réinitialiser filtres et tri
@@ -211,6 +253,16 @@ export function DataTable({
         </p>
       )}
 
+      <SelectionBar
+        mode={selection.mode}
+        count={count}
+        total={source.total}
+        onSelectAll={() => onSelectionChange(selectAllMatching())}
+        onClear={() => onSelectionChange(EMPTY_SELECTION)}
+        onEdit={() => onEditSelection(count)}
+        onDelete={() => onDeleteSelection(count)}
+      />
+
       <div
         ref={scrollRef}
         className="data-scroll"
@@ -223,7 +275,8 @@ export function DataTable({
         <div
           className="grid-inner"
           style={{
-            minWidth: columns.length * MIN_COLUMN_WIDTH + ACTION_WIDTH,
+            minWidth:
+              CHECK_WIDTH + columns.length * MIN_COLUMN_WIDTH + ACTION_WIDTH,
           }}
         >
           <div className="grid-header" role="rowgroup">
@@ -233,6 +286,21 @@ export function DataTable({
               className="grid-row"
               style={gridStyle}
             >
+              <div role="columnheader" className="grid-head-cell check-cell">
+                <IndeterminateCheckbox
+                  state={headerState}
+                  label="Sélectionner les lignes de la page"
+                  disabled={streaming || pageIds.length === 0}
+                  title={
+                    streaming
+                      ? "Page trop grande : utilisez « Tout sélectionner »"
+                      : undefined
+                  }
+                  onChange={() =>
+                    onSelectionChange(togglePage(selection, pageIds))
+                  }
+                />
+              </div>
               {table.getHeaderGroups().flatMap((group) =>
                 group.headers.map((header) => {
                   const sorted = header.column.getIsSorted();
@@ -281,6 +349,7 @@ export function DataTable({
               style={gridStyle}
               key={`filters-${filterResetKey}-${clearCount}`}
             >
+              <div role="cell" className="grid-head-cell" />
               {columns.map((column) => (
                 <div key={column.key} role="cell" className="grid-head-cell">
                   <FilterCell
@@ -311,12 +380,27 @@ export function DataTable({
                   role="row"
                   aria-rowindex={item.index + 3}
                   className="grid-row data-row"
+                  data-selected={
+                    row ? isSelected(selection, row.id) : undefined
+                  }
                   style={{
                     ...gridStyle,
                     height: ROW_HEIGHT,
                     transform: `translateY(${item.start}px)`,
                   }}
                 >
+                  <div role="cell" className="grid-cell check-cell">
+                    {row && (
+                      <input
+                        type="checkbox"
+                        aria-label={`Sélectionner la ligne ${rowNumber}`}
+                        checked={isSelected(selection, row.id)}
+                        onChange={() =>
+                          onSelectionChange(toggleRow(selection, row.id))
+                        }
+                      />
+                    )}
+                  </div>
                   {columns.map((column) => (
                     <GridCell
                       key={column.key}
