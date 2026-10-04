@@ -20,7 +20,7 @@ export function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   return (
-    <Modal title={title} onClose={onCancel}>
+    <Modal title={title} onClose={pending ? () => undefined : onCancel}>
       <p>{message}</p>
       {error && (
         <p role="alert" className="error">
@@ -28,7 +28,7 @@ export function ConfirmDialog({
         </p>
       )}
       <div className="actions">
-        <button type="button" onClick={onCancel}>
+        <button type="button" onClick={onCancel} disabled={pending}>
           Annuler
         </button>
         <button
