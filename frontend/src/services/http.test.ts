@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, request } from "./http";
+import { ApiError, request, toApiError } from "./http";
 
 function mockFetch(response: Response) {
   const fn = vi.fn().mockResolvedValue(response);
@@ -70,5 +70,11 @@ describe("request", () => {
       status: 500,
       message: "Internal Server Error",
     });
+  });
+
+  it("builds an ApiError from a response, reading the FastAPI detail", async () => {
+    const error = await toApiError(json({ detail: "nope" }, 409));
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({ status: 409, message: "nope" });
   });
 });
