@@ -1,5 +1,8 @@
 export type ColumnType = "boolean" | "integer" | "float" | "string";
 
+// Above this size the backend only answers through the streaming endpoint.
+export const MAX_PAGINATED_SIZE = 10_000;
+
 export interface Column {
   key: string; // technical key ("c0"), used in row values
   name: string; // display name from the file header
@@ -81,7 +84,7 @@ export interface SortSpec {
   direction: "asc" | "desc";
 }
 
-// Imposed sizes. 
+// Imposed sizes.
 // Above 10 000 only served them through the streaming endpoint.
 export const PAGE_SIZES = [
   10, 20, 50, 100, 1000, 5000, 10000, 1_000_000, 10_000_000,
