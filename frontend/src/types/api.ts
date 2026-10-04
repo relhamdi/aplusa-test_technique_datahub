@@ -40,3 +40,19 @@ export interface ImportUpdate {
   name?: string;
   description?: string;
 }
+
+export interface DetectedColumn {
+  name: string;
+  type: ColumnType;
+}
+
+export type IngestMode = "replace" | "append";
+
+export interface IngestionReport {
+  mode: IngestMode;
+  filename: string;
+  rows_inserted: number;
+  row_count: number;
+  // Only columns with at least one value that could not be converted.
+  rejected: RejectedColumn[];
+}
