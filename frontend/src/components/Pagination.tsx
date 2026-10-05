@@ -1,25 +1,26 @@
-import { PAGE_SIZES, type PageSize } from "../types/api";
 import { pageCount } from "../utils/tableState";
 
-interface PaginationProps {
+interface PaginationProps<S extends number> {
   page: number;
-  pageSize: PageSize;
+  pageSize: S;
+  sizes: readonly S[]; // the sizes the server accepts for this table
   total: number;
   disabled: boolean;
   onPage: (page: number) => void;
-  onPageSize: (size: PageSize) => void;
+  onPageSize: (size: S) => void;
 }
 
 const fr = (n: number) => n.toLocaleString("fr-FR");
 
-export function Pagination({
+export function Pagination<S extends number>({
   page,
   pageSize,
+  sizes,
   total,
   disabled,
   onPage,
   onPageSize,
-}: PaginationProps) {
+}: PaginationProps<S>) {
   const pages = pageCount(total, pageSize);
   const first = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const last = Math.min(page * pageSize, total);
@@ -68,11 +69,9 @@ export function Pagination({
           aria-label="Lignes par page"
           value={pageSize}
           disabled={disabled}
-          onChange={(event) =>
-            onPageSize(Number(event.target.value) as PageSize)
-          }
+          onChange={(event) => onPageSize(Number(event.target.value) as S)}
         >
-          {PAGE_SIZES.map((size) => (
+          {sizes.map((size) => (
             <option key={size} value={size}>
               {fr(size)}
             </option>

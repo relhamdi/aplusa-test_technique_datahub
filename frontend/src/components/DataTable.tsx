@@ -18,6 +18,7 @@ import {
 import { useRowSource } from "../hooks/useRowSource";
 import {
   MAX_PAGINATED_SIZE,
+  PAGE_SIZES,
   type Column,
   type FilterCondition,
   type RowOut,
@@ -441,6 +442,7 @@ export function DataTable({
       <Pagination
         page={state.page}
         pageSize={state.pageSize}
+        sizes={PAGE_SIZES}
         total={source.total}
         disabled={source.isPending}
         onPage={(page) => dispatch({ type: "page", page })}
