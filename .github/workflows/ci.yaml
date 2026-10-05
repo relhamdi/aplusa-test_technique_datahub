@@ -37,6 +37,24 @@ jobs:
       # Fails the build under 70 % coverage (given threshold).
       - run: uv run pytest --cov=app --cov-report=term-missing --cov-fail-under=70
 
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      # Fails under the 70 % thresholds (configured in vite.config.ts).
+      - run: npm run coverage
+      - run: npm run build
+
   docker:
     runs-on: ubuntu-latest
     steps:
@@ -50,5 +68,12 @@ jobs:
           context: ./backend
           target: prod
           push: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          target: prod
+          push: false
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend

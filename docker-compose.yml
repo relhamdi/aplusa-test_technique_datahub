@@ -37,5 +37,15 @@ services:
       mongo:
         condition: service_healthy
 
+  frontend:
+    build:
+      context: ./frontend
+      target: prod
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+
 volumes:
   mongo_data:
