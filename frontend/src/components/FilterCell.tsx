@@ -9,10 +9,17 @@ export const FILTER_DEBOUNCE_MS = 300;
 interface FilterCellProps {
   column: Column;
   current: FilterCondition | undefined; // the filter currently applied to this column
+  // Overrides the operators of the column type (the statistics table has no empty values).
+  operators?: FilterOp[];
   onChange: (columnKey: string, filter: FilterCondition | null) => void;
 }
 
-export function FilterCell({ column, current, onChange }: FilterCellProps) {
+export function FilterCell({
+  column,
+  current,
+  operators,
+  onChange,
+}: FilterCellProps) {
   // The draft is local state: every keystroke updates it,
   // but only the debounced result reaches the table state.
   const [draft, setDraft] = useState(() => draftFromFilter(column, current));
@@ -48,7 +55,7 @@ export function FilterCell({ column, current, onChange }: FilterCellProps) {
           setDraft({ ...draft, op: event.target.value as FilterOp })
         }
       >
-        {OPS_BY_TYPE[column.type].map((op) => (
+        {(operators ?? OPS_BY_TYPE[column.type]).map((op) => (
           <option key={op} value={op}>
             {OP_LABELS[op]}
           </option>

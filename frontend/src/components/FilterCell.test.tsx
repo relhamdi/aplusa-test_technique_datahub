@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -115,5 +115,23 @@ describe("FilterCell", () => {
         value: true,
       }),
     );
+  });
+
+  it("offers only the operators it is given instead of those of the type", () => {
+    render(
+      <FilterCell
+        column={label}
+        current={undefined}
+        operators={["equals", "contains"]}
+        onChange={vi.fn()}
+      />,
+    );
+    const options = within(
+      screen.getByLabelText("Opérateur label"),
+    ).getAllByRole("option");
+    expect(options.map((o) => o.textContent)).toEqual([
+      "est égal à",
+      "contient",
+    ]);
   });
 });
