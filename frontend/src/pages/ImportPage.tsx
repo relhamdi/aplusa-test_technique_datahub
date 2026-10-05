@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import { DataTab } from "../components/DataTab";
+import { StatsTab } from "../components/StatsTab";
 import { useImport } from "../hooks/useImports";
 import { ApiError } from "../services/http";
 
@@ -10,7 +10,19 @@ type Tab = "data" | "stats";
 export function ImportPage() {
   const { id = "" } = useParams();
   const { data, isPending, error } = useImport(id);
-  const [tab, setTab] = useState<Tab>("data");
+  const [params, setParams] = useSearchParams();
+  // A reload or a shared link opens the same tab, 
+  // and Back returns to the previous one. Every other key (table and statistics state) is kept.
+  const tab: Tab = params.get("tab") === "stats" ? "stats" : "data";
+
+  function selectTab(next: Tab) {
+    setParams((previous) => {
+      const updated = new URLSearchParams(previous);
+      if (next === "stats") updated.set("tab", "stats");
+      else updated.delete("tab");
+      return updated;
+    });
+  }
 
   return (
     <main className="page">
@@ -32,25 +44,28 @@ export function ImportPage() {
             <button
               role="tab"
               aria-selected={tab === "data"}
-              onClick={() => setTab("data")}
+              aria-controls="import-panel"
+              onClick={() => selectTab("data")}
             >
               Données
             </button>
             <button
               role="tab"
               aria-selected={tab === "stats"}
-              onClick={() => setTab("stats")}
+              aria-controls="import-panel"
+              onClick={() => selectTab("stats")}
             >
               Statistiques
             </button>
           </div>
-          <div role="tabpanel">
+          <div role="tabpanel" id="import-panel">
+            {/* The key remounts the tab when another import is opened. */}
             {tab === "data" ? (
               <DataTab key={data.id} item={data} />
             ) : (
-              <p>Statistiques : TODO.</p>
+              <StatsTab key={data.id} item={data} />
             )}
-          </div>{" "}
+          </div>
         </>
       )}
     </main>
