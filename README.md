@@ -6,7 +6,7 @@ Application web de gestion d'imports de données (CSV / XLSX) inspirée de Datah
 - **Frontend** : React + TypeScript (voir section Frontend, *WIP*)
 - **Infra** : Docker, un unique `docker-compose.yml`, configuration par fichiers `.env`
 
-> Statut : backend complet et testé ; frontend : liste des imports, import de fichier, tableau de données (tri, filtres, pagination, flux), édition et opérations par lot. L'onglet Statistiques est en cours (voir « Fonctionnalités »).
+> Statut : toutes les fonctionnalités du sujet sont livrées (backend et frontend). Voir « Fonctionnalités » et « Améliorations possibles ».
 ---
 
 ## Sommaire
@@ -39,19 +39,23 @@ Application web de gestion d'imports de données (CSV / XLSX) inspirée de Datah
     - [Mesures](#mesures)
     - [Stratégie de tests](#stratégie-de-tests)
     - [Limitations connues (frontend)](#limitations-connues-frontend)
+  - [Améliorations possibles](#améliorations-possibles)
+    - [Fonctionnel](#fonctionnel)
+    - [Performance et robustesse](#performance-et-robustesse)
+    - [Qualité et exploitation](#qualité-et-exploitation)
 
 ## Fonctionnalités
 
-| Fonctionnalité du sujet                                                               | Backend | Frontend |
-| ------------------------------------------------------------------------------------- | ------- | -------- |
-| Liste des imports (vide au démarrage), création, édition, suppression, réorganisation | ✅       | ✅        |
-| Import CSV/XLSX, réimport (remplacement ou ajout)                                     | ✅       | ✅        |
-| Détection des types et correction par l'utilisateur                                   | ✅       | ✅        |
-| Tableau dynamique, tri, filtres par colonne, pagination (10 à 10 000 000)             | ✅       | ✅        |
-| État conservé (page, tri, filtres) au rechargement et au retour dans l'import         | n/a     | ✅        |
-| Édition d'une ligne (validation, annulation, confirmation)                            | ✅       | ✅        |
-| Sélection multiple, suppression et édition par lot (conserver / modifier / vider)     | ✅       | ✅        |
-| Onglet Statistiques                                                                   | ✅       | ⏳        |
+| Fonctionnalité du sujet                                                                           | Backend | Frontend |
+| ------------------------------------------------------------------------------------------------- | ------- | -------- |
+| Liste des imports (vide au démarrage), création, édition, suppression, réorganisation             | ✅       | ✅        |
+| Import CSV/XLSX, réimport (remplacement ou ajout)                                                 | ✅       | ✅        |
+| Détection des types et correction par l'utilisateur                                               | ✅       | ✅        |
+| Tableau dynamique, tri, filtres par colonne, pagination (10 à 10 000 000)                         | ✅       | ✅        |
+| État conservé (page, tri, filtres) au rechargement et au retour dans l'import                     | n/a     | ✅        |
+| Édition d'une ligne (validation, annulation, confirmation)                                        | ✅       | ✅        |
+| Sélection multiple, suppression et édition par lot (conserver / modifier / vider)                 | ✅       | ✅        |
+| Onglet Statistiques (colonne au choix, résumés par type, tableau valeur/occurrence, cases 1 et 2) | ✅       | ✅        |
 
 ---
 
@@ -117,6 +121,8 @@ Principes appliqués :
 | Sélection multiple        | Mode `ids` ou mode `filter` + `excluded_ids`                           | « Tout sélectionner » sur le résultat filtré sans jamais matérialiser 1 M d'identifiants                                                  |
 | Persistance de l'état UI  | URL + localStorage (frontend)                                          | Pas de besoin backend, état partageable par URL                                                                                           |
 | Un Dockerfile par service | `backend/Dockerfile`, `frontend/Dockerfile`                            | Plus propre qu'un Dockerfile unique ; un seul `docker-compose.yml` lance tout                                                             |
+
+> Note: TanStack Table figé en v8, la v9 était installée par défaut par `npm` au moment du développement ; la v8 a une API stable et connue, et suffit au besoin (colonnes, en-têtes, état de tri en mode manuel).
 
 ### Règles de typage
 
@@ -476,6 +482,12 @@ Aucune logique métier dans les composants : la traduction état → requête, l
 - **Pages de plus de 10 000 lignes en flux.** Au-delà, le frontend lit le flux NDJSON du backend ligne par ligne. Les lignes sont stockées hors de React (`useSyncExternalStore`), la progression est publiée au plus toutes les 150 ms, la taille de défilement est connue dès la première ligne, le chargement est interruptible, et un flux n'est considéré complet que s'il se termine par son marqueur `done`. La mémoire est libérée en quittant ce mode.
 - **Sélection multiple.** Deux formes, identiques à l'API : lignes cochées, ou « tout sélectionner » sur le résultat filtré avec les lignes décochées. Un million de lignes sélectionné n'envoie jamais un million d'identifiants. La sélection est vidée quand les filtres changent.
 - **Validation d'abord côté client, vérité côté serveur.** Les nombres sont envoyés sous forme de texte et convertis par le backend avec les règles de l'import : aucune perte de précision sur les grands entiers, virgule décimale acceptée.
+- **Statistiques calculées par le backend à chaque changement** (colonne, case, filtre, tri, page) : le navigateur n'agrège rien. Une requête devenue inutile est annulée côté navigateur (le calcul MongoDB, lui, va à son terme).
+- **Case 1 (filtres de l'onglet Données).** L'onglet Statistiques lit les filtres comme le fait l'onglet Données (URL, sinon état sauvegardé de l'import) : ils sont donc corrects même si l'onglet est ouvert directement après un rechargement. Ils ne sont envoyés que si la case est cochée.
+- **Case 2 (filtres du tableau valeur/occurrence)**, proposée pour les colonnes texte uniquement : elle restreint le total aux valeurs retenues par ces filtres, qui filtrent toujours le tableau lui-même. Le nombre de valeurs vides n'est pas concerné.
+- **Pas de résultat périmé** : changer de colonne efface le résultat précédent ; changer de page, de tri ou de filtre sur la même colonne garde l'ancien résultat (estompé) pendant le chargement.
+- **Onglet et état des statistiques dans l'URL** (`tab=stats`, colonne, cases, filtres, tri, page) : un rechargement ou un lien partagé retrouve le même écran, et le bouton Retour revient à l'onglet précédent.
+- **Conventions d'affichage** : les valeurs vides sont exclues du total et des pourcentages, et comptées à part ; les pourcentages sont calculés sur les valeurs non vides, à deux décimales. Les filtres du tableau valeur/occurrence ne proposent pas « est vide » (les cellules vides n'en font pas partie).
 
 ### Mesures
 
@@ -491,8 +503,8 @@ Aucune logique métier dans les composants : la traduction état → requête, l
 
 ### Stratégie de tests
 
-- **Unitaires** : logique pure (état du tableau et encodage URL, validation des filtres et des saisies, sélection, plan d'édition par lot), service HTTP, lecture du flux (lignes coupées entre deux paquets, caractères multi-octets, flux tronqué, annulation), magasin de lignes (publication par rafales, interruption, relance).
-- **Composants et parcours** : React Testing Library avec `fetch` simulé (la frontière réseau, jamais les services) : import en deux temps, tri en trois états, filtres avec debounce, pagination, restauration depuis l'URL et le `localStorage`, édition avec confirmation, sélection et opérations par lot, pages en flux.
+- **Unitaires** : logique pure (état du tableau et encodage URL, validation des filtres et des saisies, sélection, plan d'édition par lot), service HTTP, lecture du flux (lignes coupées entre deux paquets, caractères multi-octets, flux tronqué, annulation), magasin de lignes (publication par rafales, interruption, relance), état des statistiques et son codage dans l'URL (colonnes inconnues, opérateurs invalides, case 2 sur colonne non texte), conversion des filtres du tableau.
+- **Composants et parcours** : React Testing Library avec `fetch` simulé (la frontière réseau, jamais les services) : import en deux temps, tri en trois états, filtres avec debounce, pagination, restauration depuis l'URL et le `localStorage`, édition avec confirmation, sélection et opérations par lot, pages en flux. Statistiques par type, cases 1 et 2 (y compris lecture des filtres sauvegardés), tri, filtres avec debounce, pagination, changement de colonne sans résultat périmé, onglet dans l'URL et état de l'onglet Données conservé.
 - **Non couvert automatiquement** : le geste de glisser-déposer de la liste des imports (jsdom n'a pas de mise en page) ; sa logique pure l'est, et le geste a été vérifié à la main.
 - Seuil de couverture : 70 % minimum (configuré dans `vite.config.ts`, appliqué en CI). Couverture actuelle : +92% sur tous les fichiers.
 
@@ -506,3 +518,43 @@ Aucune logique métier dans les composants : la traduction état → requête, l
 - Le type d'une colonne ne peut pas être changé après l'import : il faut refaire un remplacement avec le même fichier.
 - Pas de barre de progression pendant l'envoi d'un fichier (`fetch` n'expose pas la progression d'envoi) ; le fichier est envoyé deux fois en mode remplacement (détection puis import).
 - Pas d'authentification ; dernier enregistrement gagnant en cas de modifications concurrentes.
+- L'état de l'onglet Statistiques est conservé dans l'URL (rechargement, lien partagé) mais pas dans le `localStorage` : en quittant l'import puis en y revenant, l'onglet Données s'ouvre (son état à lui est restauré, y compris pour la case 1). Le sujet n'exige cette restauration que pour le tableau de données.
+- Le tableau valeur/occurrence est paginé de 10 à 100 lignes, sans virtualisation ni flux.
+- Annuler une requête de statistiques côté navigateur n'interrompt pas le calcul MongoDB.
+- Le minimum, le maximum et la moyenne d'entiers au-delà de 2⁵³ sont affichés arrondis (nombres JSON).
+- Pas de graphiques : les résumés sont numériques (une barre simple pour la répartition d'un booléen).
+
+## Améliorations possibles
+
+Ce qui n'a pas été fait, par ordre d'intérêt, avec la raison.
+
+### Fonctionnel
+
+- **Changement de type après import** : aujourd'hui il faut refaire un remplacement avec le même fichier. Un endpoint de conversion en place (réécriture avec `$convert`, rapport des valeurs rejetées, invalidation des index de la colonne) l'éviterait.
+- **Plusieurs filtres par colonne et groupes OU** : l'API accepte plusieurs conditions (ET), l'interface en propose une par colonne.
+- **Choix de la feuille XLSX** : seule la première est lue.
+- **Import asynchrone avec suivi de progression** : tâche en arrière-plan, progression interrogeable, et envoi unique du fichier (aujourd'hui il est envoyé deux fois en mode remplacement : détection puis import).
+- **Sélection de lignes en mode flux** : aujourd'hui seule « Tout sélectionner » est disponible pour ces pages.
+- **Persistance de l'état des statistiques dans le `localStorage`** (comme pour le tableau), pour le retour dans l'import.
+- **Graphiques** : histogramme pour les colonnes numériques, répartition des valeurs les plus fréquentes pour les colonnes texte.
+- **Statistiques supplémentaires** : médiane, écart-type, quantiles (possible évolution).
+- **Export CSV** du tableau valeur/occurrence.
+- **Limite de durée côté serveur** (`maxTimeMS`) sur les agrégations, pour qu'une requête abandonnée par le navigateur ne continue pas à consommer MongoDB.
+
+### Performance et robustesse
+
+- **Ne plus créer d'index sur une colonne booléenne pour les statistiques** : deux valeurs distinctes, gain négligeable, mais coût d'espace et d'écriture.
+- **Pagination par curseur (keyset)** pour les très gros `skip`, en complément du `skip/limit`, avec conservation de « aller à la page N » pour les petits décalages.
+- **Sérialiser les écritures concurrentes sur un import** (verrou applicatif ou champ de version) : aujourd'hui un `replace` concurrent d'un `append` peut perdre l'ajout.
+- **Paralléliser l'ingestion** (`ProcessPoolExecutor` ou plusieurs workers).
+- **Rafraîchissement ciblé d'une page en flux** après une édition, au lieu d'un rechargement complet.
+- **Rapport de progression à l'envoi d'un fichier** (`XMLHttpRequest` à la place de `fetch`).
+
+### Qualité et exploitation
+
+- **Tests de bout en bout** dans un navigateur (Playwright) sur l'application déployée par Docker : parcours complet créer → importer → filtrer → éditer → statistiques.
+- **Test de charge automatisé** reproduisant les mesures de ce README sur un jeu de données généré.
+- **Adaptation mobile** du tableau et des fenêtres.
+- **Journalisation structurée et métriques** (durées d'import, requêtes lentes, taille des collections).
+- **CD** : publication des images dans un registre et déploiement preprod/prod depuis la CI.
+- **Sauvegarde et restauration** de MongoDB (volume `mongo_data`).
