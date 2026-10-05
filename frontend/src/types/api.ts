@@ -133,3 +133,69 @@ export interface BatchResult {
   matched: number; // rows selected
   affected: number; // rows really modified or deleted
 }
+
+export type ValueTarget = "value" | "count";
+
+/** Filter on one column of the value/occurrence table. */
+export interface ValueFilter {
+  target: ValueTarget;
+  op: FilterOp;
+  value?: unknown;
+  value_to?: unknown;
+}
+
+export interface ValueSort {
+  target: ValueTarget;
+  direction: "asc" | "desc";
+}
+
+// Sizes the statistics endpoint accepts for its table.
+export const STATS_PAGE_SIZES = [10, 20, 50, 100] as const;
+export type StatsPageSize = (typeof STATS_PAGE_SIZES)[number];
+
+export interface StatsRequest {
+  column: string; // technical key
+  apply_data_filters: boolean; // checkbox 1
+  data_filters: FilterCondition[];
+  value_filters: ValueFilter[];
+  apply_value_filters: boolean; // checkbox 2 (string columns only)
+  sort: ValueSort;
+  page: number;
+  page_size: StatsPageSize;
+}
+
+export interface BooleanSummary {
+  true_count: number;
+  false_count: number;
+  true_percent: number; // of non-empty values
+  false_percent: number;
+}
+
+export interface NumericSummary {
+  min: number | null;
+  max: number | null;
+  avg: number | null;
+}
+
+export interface ValueCount {
+  value: unknown;
+  count: number;
+}
+
+export interface ValueCountPage {
+  rows: ValueCount[];
+  total: number; // distinct values after filters
+  page: number;
+  page_size: number;
+}
+
+export interface StatsOut {
+  column: string;
+  type: ColumnType;
+  count: number; // non-empty values
+  empty_count: number; // reported apart
+  boolean: BooleanSummary | null;
+  numeric: NumericSummary | null;
+  table: ValueCountPage | null; // absent for boolean columns
+  indexing: string[];
+}
