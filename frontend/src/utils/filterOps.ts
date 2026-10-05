@@ -24,3 +24,9 @@ export const OP_LABELS: Record<FilterOp, string> = {
 
 // These operators take no value: the input must be hidden.
 export const NO_VALUE_OPS: FilterOp[] = ["is_empty", "is_not_empty"];
+
+// The value/occurrence table of the statistics never contains empty cells,
+// empty operators are meaningless there (the backend answers 422).
+export function statsOps(type: ColumnType): FilterOp[] {
+  return OPS_BY_TYPE[type].filter((op) => !NO_VALUE_OPS.includes(op));
+}
