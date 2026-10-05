@@ -5,6 +5,7 @@ import { App } from "./App";
 import { json, stubApi } from "./test/api";
 import { renderWithProviders } from "./test/utils";
 import type { ImportSummary } from "./types/api";
+import userEvent from "@testing-library/user-event";
 
 const sample: ImportSummary = {
   id: "1",
@@ -18,7 +19,20 @@ const sample: ImportSummary = {
   updated_at: "",
 };
 
-afterEach(() => vi.unstubAllGlobals());
+const withColumns: ImportSummary = {
+  ...sample,
+  row_count: 3,
+  columns: [{ key: "c0", name: "id", type: "integer" }],
+};
+const ROWS = "POST /api/imports/1/rows/query";
+// Total of 100 rows: page 2 exists, so the table does not fall back to page 1.
+const rowsPage = () =>
+  json({ rows: [], total: 100, page: 2, page_size: 20, indexing: [] });
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  localStorage.clear();
+});
 
 describe("App routing", () => {
   it("opens an import on /imports/:id with its two tabs", async () => {
@@ -52,5 +66,38 @@ describe("App routing", () => {
     expect(
       await screen.findByText("Aucun import pour le moment."),
     ).toBeInTheDocument();
+  });
+
+  it("opens the tab named in the URL", async () => {
+    stubApi({ "GET /api/imports/1": () => json(withColumns) });
+    renderWithProviders(<App />, { route: "/imports/1?tab=stats" });
+
+    expect(
+      await screen.findByRole("tab", { name: "Statistiques" }),
+    ).toHaveAttribute("aria-selected", "true");
+    expect(
+      screen.getByText(
+        "Choisissez une colonne pour calculer ses statistiques.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("switches tabs and keeps the table state of the Data tab", async () => {
+    const user = userEvent.setup();
+    stubApi({
+      "GET /api/imports/1": () => json(withColumns),
+      [ROWS]: rowsPage,
+    });
+    renderWithProviders(<App />, { route: "/imports/1?page=2" });
+    expect(await screen.findByText("Page 2 sur 5")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Statistiques" }));
+    expect(screen.getByRole("tab", { name: "Statistiques" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Données" }));
+    expect(await screen.findByText("Page 2 sur 5")).toBeInTheDocument();
   });
 });
