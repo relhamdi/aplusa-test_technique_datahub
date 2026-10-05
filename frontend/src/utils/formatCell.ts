@@ -1,5 +1,12 @@
 import type { ColumnType } from "../types/api";
 
+// 20 fraction digits: never truncate a float to the default 3 decimals.
+export const formatNumber = (value: number): string =>
+  value.toLocaleString("fr-FR", { maximumFractionDigits: 20 });
+
+export const formatPercent = (value: number): string =>
+  `${value.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} %`;
+
 /**
  * Display text for a NON-empty value.
  * Empty cells (null) are rendered by the component with a distinct style,
@@ -9,9 +16,7 @@ import type { ColumnType } from "../types/api";
  */
 export function formatCell(value: unknown, type: ColumnType): string {
   if (type === "boolean") return value ? "Oui" : "Non";
-  if ((type === "integer" || type === "float") && typeof value === "number") {
-    // 20 fraction digits: never truncate a float to the default 3 decimals.
-    return value.toLocaleString("fr-FR", { maximumFractionDigits: 20 });
-  }
+  if ((type === "integer" || type === "float") && typeof value === "number")
+    return formatNumber(value);
   return String(value);
 }

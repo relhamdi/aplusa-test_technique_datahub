@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { formatCell } from "./formatCell";
+import { formatCell, formatNumber, formatPercent } from "./formatCell";
 
 it("formats booleans in French", () => {
   expect(formatCell(true, "boolean")).toBe("Oui");
@@ -15,4 +15,13 @@ it("uses the French decimal comma and never truncates decimals", () => {
 
 it("keeps text as is", () => {
   expect(formatCell("(vide)", "string")).toBe("(vide)");
+});
+
+it("formats percentages with two decimals and a French comma", () => {
+  expect(formatPercent(25)).toBe("25,00 %");
+  expect(formatPercent(50.08)).toBe("50,08 %");
+});
+
+it("formats plain numbers without truncating decimals", () => {
+  expect(formatNumber(2.625)).toBe("2,625");
 });
