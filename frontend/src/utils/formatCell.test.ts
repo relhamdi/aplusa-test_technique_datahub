@@ -1,6 +1,11 @@
 import { expect, it } from "vitest";
 
-import { formatCell, formatNumber, formatPercent } from "./formatCell";
+import {
+  formatAverage,
+  formatCell,
+  formatNumber,
+  formatPercent,
+} from "./formatCell";
 
 it("formats booleans in French", () => {
   expect(formatCell(true, "boolean")).toBe("Oui");
@@ -24,4 +29,9 @@ it("formats percentages with two decimals and a French comma", () => {
 
 it("formats plain numbers without truncating decimals", () => {
   expect(formatNumber(2.625)).toBe("2,625");
+});
+
+it("rounds an average to two decimals for display", () => {
+  expect(formatAverage(250.63347991)).toBe("250,63");
+  expect(formatAverage(2.5)).toBe("2,50");
 });

@@ -167,7 +167,7 @@ describe("StatsTab", () => {
     expect(screen.getByText("Minimum").parentElement).toHaveTextContent("1,5");
     expect(screen.getByText("Maximum").parentElement).toHaveTextContent("4");
     expect(screen.getByText("Moyenne").parentElement).toHaveTextContent(
-      "2,625",
+      "2,63",
     );
     expect(
       screen.getByRole("table", { name: "Valeurs et occurrences" }),

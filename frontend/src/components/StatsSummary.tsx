@@ -1,5 +1,10 @@
 import type { StatsOut } from "../types/api";
-import { formatCell, formatNumber, formatPercent } from "../utils/formatCell";
+import {
+  formatAverage,
+  formatCell,
+  formatNumber,
+  formatPercent,
+} from "../utils/formatCell";
 
 const NONE = "—"; // min/max/average of a column with no value
 
@@ -60,7 +65,7 @@ export function StatsSummary({
             />
             <Stat
               label="Moyenne"
-              value={numeric.avg === null ? NONE : formatNumber(numeric.avg)}
+              value={numeric.avg === null ? NONE : formatAverage(numeric.avg)}
             />
           </>
         )}
@@ -85,7 +90,8 @@ export function StatsSummary({
 
       {valueFiltersApplied && (
         <p className="hint">
-          Le total ne compte que les valeurs correspondant aux filtres du tableau ci-dessous.
+          Le total ne compte que les valeurs correspondant aux filtres du
+          tableau ci-dessous.
         </p>
       )}
     </section>

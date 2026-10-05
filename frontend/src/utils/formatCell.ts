@@ -7,6 +7,13 @@ export const formatNumber = (value: number): string =>
 export const formatPercent = (value: number): string =>
   `${value.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} %`;
 
+// Display only: the backend value stays exact. Two decimals, like the percentages.
+export const formatAverage = (value: number): string =>
+  value.toLocaleString("fr-FR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
 /**
  * Display text for a NON-empty value.
  * Empty cells (null) are rendered by the component with a distinct style,
