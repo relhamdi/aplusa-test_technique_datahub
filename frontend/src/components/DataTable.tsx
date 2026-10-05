@@ -173,18 +173,20 @@ export function DataTable({
       dispatch({ type: "page", page: pages });
   }, [source.ready, state.page, pages, dispatch]);
 
-  // Ids of the rows of the current page, for the header checkbox. 
+  // Ids of the rows of the current page, for the header checkbox.
   // Not computed for streamed pages: walking up to 1M rows on every scroll render would freeze the grid
   // (and the backend caps id lists at 100 000). "Select all" covers those pages.
+  const { count: rowCount, getRow } = source;
+
   const pageIds = useMemo(() => {
     if (streaming) return [];
     const ids: string[] = [];
-    for (let i = 0; i < source.count; i += 1) {
-      const row = source.getRow(i);
+    for (let i = 0; i < rowCount; i += 1) {
+      const row = getRow(i);
       if (row) ids.push(row.id);
     }
     return ids;
-  }, [streaming, source.count, source.getRow]);
+  }, [streaming, rowCount, getRow]);
   const headerState = useMemo(
     () => pageState(selection, pageIds),
     [selection, pageIds],
