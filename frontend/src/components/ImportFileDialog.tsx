@@ -9,14 +9,7 @@ import type {
   IngestMode,
 } from "../types/api";
 import { Modal } from "./Modal";
-
-const TYPE_LABELS: Record<ColumnType, string> = {
-  boolean: "Booléen",
-  integer: "Entier",
-  float: "Décimal",
-  string: "Texte",
-};
-const TYPES = Object.keys(TYPE_LABELS) as ColumnType[];
+import { COLUMN_TYPES, TYPE_LABELS } from "../utils/columnTypes";
 
 type Step = "file" | "types" | "report";
 
@@ -210,7 +203,7 @@ export function ImportFileDialog({
                           setType(index, event.target.value as ColumnType)
                         }
                       >
-                        {TYPES.map((type) => (
+                        {COLUMN_TYPES.map((type) => (
                           <option key={type} value={type}>
                             {TYPE_LABELS[type]}
                           </option>
